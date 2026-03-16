@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import tempfile
 from typing import Awaitable, Callable, Dict, List, Optional
 
 from config import DEFAULT_VIDEO
@@ -15,20 +16,19 @@ def _resolution_for(format_choice: str, settings: Dict[str, str]) -> str:
     return settings.get("resolution_landscape", DEFAULT_VIDEO["resolution_landscape"])
 
 
-def _escape_drawtext(text: str) -> str:
-    return (
-        text.replace("\\", "\\\\")
-        .replace(":", "\\:")
-        .replace("'", "\\'")
-        .replace("%", "\\%")
-    )
+def _escape_ffmpeg_path(path: str) -> str:
+    """
+    Escapes a path for use in FFmpeg filters (e.g., drawtext textfile, ass).
+    FFmpeg filtergraph parser requires escaping of colons and backslashes.
+    """
+    return path.replace("\\", "\\\\").replace(":", "\\:")
 
 
 def _build_scene_command(
     duration: float,
     bg_video: Optional[str],
     overlay_image: Optional[str],
-    overlay_text: Optional[str],
+    text_file: Optional[str],
     voiceover: str,
     out_path: str,
     resolution: str,
@@ -57,10 +57,10 @@ def _build_scene_command(
     filters.append(bg_filter)
     current_label = "[bg]"
 
-    if overlay_text and not overlay_image:
-        safe_text = _escape_drawtext(overlay_text)
+    if text_file and not overlay_image:
+        safe_path = _escape_ffmpeg_path(text_file)
         draw = (
-            f"{current_label}drawtext=text='{safe_text}':"
+            f"{current_label}drawtext=textfile='{safe_path}':"
             f"font='{font_name}':fontsize={font_size}:fontcolor=white:"
             "box=1:boxcolor=black@0.4:boxborderw=20:"
             "x=(w-text_w)/2:y=(h-text_h)/2[txt]"
@@ -144,23 +144,37 @@ async def compose_video(
         font_name = str(video_settings.get("font_name", DEFAULT_VIDEO["font_name"]))
         font_size = int(video_settings.get("font_size", DEFAULT_VIDEO["font_size"]))
         out_path = os.path.join(scene_dir, f"scene_{idx}.mp4")
-        cmd = _build_scene_command(
-            duration,
-            bg_video,
-            overlay,
-            overlay_text,
-            voice,
-            out_path,
-            resolution,
-            fps,
-            font_name,
-            font_size,
-        )
-        await log("info", f"Rendering scene {idx}/{len(scenes)}")
-        code = await run_command(cmd, log=log)
-        if code != 0:
-            raise RuntimeError(f"ffmpeg failed while rendering scene {idx}")
-        scene_files.append(out_path)
+
+        text_file = None
+        if overlay_text:
+            # Write overlay_text to a temp file to avoid escaping issues
+            with tempfile.NamedTemporaryFile(
+                mode="w", delete=False, suffix=".txt", encoding="utf-8"
+            ) as tf:
+                tf.write(overlay_text)
+                text_file = tf.name
+
+        try:
+            cmd = _build_scene_command(
+                duration,
+                bg_video,
+                overlay,
+                text_file,
+                voice,
+                out_path,
+                resolution,
+                fps,
+                font_name,
+                font_size,
+            )
+            await log("info", f"Rendering scene {idx}/{len(scenes)}")
+            code = await run_command(cmd, log=log)
+            if code != 0:
+                raise RuntimeError(f"ffmpeg failed while rendering scene {idx}")
+            scene_files.append(out_path)
+        finally:
+            if text_file and os.path.exists(text_file):
+                os.remove(text_file)
 
     concat_list = os.path.join(scene_dir, "concat.txt")
     with open(concat_list, "w", encoding="utf-8") as f:
@@ -221,13 +235,14 @@ async def compose_video(
 
     if burn_subtitles:
         await log("info", "Burning subtitles")
+        safe_ass_path = _escape_ffmpeg_path(burn_subtitles)
         burn_cmd = [
             "ffmpeg",
             "-y",
             "-i",
             final_input,
             "-vf",
-            f"ass={burn_subtitles}",
+            f"ass='{safe_ass_path}'",
             "-c:v",
             "libx264",
             "-preset",
