@@ -2,10 +2,41 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 import shlex
 from typing import Awaitable, Callable, Dict, Iterable, List, Optional
 
 LogFn = Callable[[str, str], Awaitable[None]]
+
+# Shared stopwords for query cleaning across modules
+STOPWORDS = {
+    "a", "an", "the", "of", "for", "and", "to", "in", "on", "with", "from",
+    "about", "is", "are", "was", "were", "be", "been", "being", "have", "has",
+    "had", "do", "does", "did", "but", "if", "or", "because", "as", "until",
+    "while", "at", "by", "for", "with", "about", "against", "between", "into",
+    "through", "during", "before", "after", "above", "below", "to", "from",
+    "up", "down", "in", "out", "on", "off", "over", "under", "again", "further",
+    "then", "once", "here", "there", "when", "where", "why", "how", "all", "any",
+    "both", "each", "few", "more", "most", "other", "some", "such", "no", "nor",
+    "not", "only", "own", "same", "so", "than", "too", "very", "s", "t", "can",
+    "will", "just", "don", "should", "now", "detailed", "explanation", "historical",
+    "impact", "overview", "summary", "description", "video", "about", "showing",
+    "screenshot", "image", "photo", "picture", "cinematic", "background"
+}
+
+
+def clean_and_tokenize(text: str, max_words: int = 5) -> str:
+    """Shared utility to clean text and extract keywords for search queries."""
+    if not text:
+        return ""
+    # Clean: lower, strip non-alphanumeric (keep spaces)
+    cleaned = re.sub(r"[^\w\s]", " ", text.lower())
+    # Tokenize and filter using common stopwords
+    tokens = [t for t in cleaned.split() if t and t not in STOPWORDS]
+    if not tokens:
+        # Fallback to raw tokens if everything was filtered
+        tokens = [t for t in cleaned.split() if t][:max_words]
+    return " ".join(tokens[:max_words])
 
 
 def ensure_dir(path: str) -> None:

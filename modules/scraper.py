@@ -16,7 +16,7 @@ from config import (
     OLLAMA_API_URL,
     SCRAPER_URLS,
 )
-from modules.utils import ensure_dir, run_command
+from modules.utils import ensure_dir, run_command, clean_and_tokenize
 
 LogFn = Callable[[str, str], Awaitable[None]]
 
@@ -392,26 +392,6 @@ async def download_image(url: str, out_path: str) -> bool:
         return False
 
 
-_STOPWORDS = {
-    "a",
-    "an",
-    "the",
-    "of",
-    "for",
-    "and",
-    "to",
-    "in",
-    "on",
-    "with",
-    "from",
-    "about",
-    "screenshot",
-    "image",
-    "photo",
-    "picture",
-}
-
-
 async def generate_ai_search_queries(
     scene: Dict[str, Any],
     asset_type: str,
@@ -452,11 +432,7 @@ async def generate_ai_search_queries(
 
 
 def _simplify_query(query: str) -> str:
-    cleaned = re.sub(r"[^\w\s]", " ", query).lower().strip()
-    tokens = [t for t in cleaned.split() if t and t not in _STOPWORDS]
-    if not tokens:
-        return cleaned.strip()
-    return " ".join(tokens)
+    return clean_and_tokenize(query)
 
 
 def _alternate_queries(query: str, fallback_topic: Optional[str] = None) -> List[str]:

@@ -21,6 +21,7 @@ from modules.ai_helper import (
     _repair_json_deterministic,
     LogFn
 )
+from modules.utils import clean_and_tokenize
 
 SYSTEM_PROMPT = """
 You are a video planning assistant. Convert the user prompt into strict JSON only.
@@ -111,6 +112,11 @@ def _fallback_timeline(prompt: str, target_duration: Optional[float]) -> Dict[st
     per = round(total / 3, 2)
     base = prompt.strip().split("\n")[0]
     base = base[:140] if base else "A short thematic story."
+
+    # Extract keywords for better visual queries
+    keywords = clean_and_tokenize(base, max_words=5) or "cinematic background"
+    overlay = clean_and_tokenize(base, max_words=3).title() or "Story"
+
     scenes = []
     for idx in range(1, 4):
         scenes.append(
@@ -118,12 +124,12 @@ def _fallback_timeline(prompt: str, target_duration: Optional[float]) -> Dict[st
                 "id": idx,
                 "duration": per,
                 "voiceover": f"Scene {idx}: {base}",
-                "visual_query": base.split(".")[0][:60] or "cinematic background",
-                "overlay_text": base.split(".")[0][:40] or "Story",
+                "visual_query": keywords,
+                "overlay_text": overlay,
             }
         )
     return {
-        "title": base[:60] or "Generated Story",
+        "title": base[:60].strip() or "Generated Story",
         "total_duration": total,
         "music_mood": "cinematic",
         "scenes": scenes,
@@ -193,10 +199,6 @@ def _clean_voiceover_text(text: str) -> str:
     cleaned = cleaned.strip().strip('"').strip("'")
     cleaned = re.sub(r"\s+", " ", cleaned)
     return cleaned
-
-
-def _word_count(text: str) -> int:
-    return len([w for w in re.split(r"\s+", text.strip()) if w])
 
 
 async def generate_voiceover(
