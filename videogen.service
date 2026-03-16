@@ -1,0 +1,15 @@
+[Unit]
+Description=Video Generator Service
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/workspace/videomaker
+Environment=PYTHONUNBUFFERED=1
+Environment=MODELS_DIR=/models
+ExecStart=/workspace/videomaker/.venv/bin/uvicorn main:app --host 0.0.0.0 --port 8065 --workers 1
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

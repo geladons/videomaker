@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Video Generator History</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/static/styles.css" />
+  <script defer src="/static/app.js"></script>
+</head>
+<body class="min-h-screen">
+  <div class="hero-gradient"></div>
+  <div class="relative z-10 max-w-6xl mx-auto px-6 py-10">
+    <header class="flex items-center justify-between mb-10">
+      <div>
+        <p class="text-xs uppercase tracking-[0.3em] text-amber-300">Archive</p>
+        <h1 class="text-4xl font-semibold">History</h1>
+        <p class="text-slate-300 mt-2">Every generation, with logs and exports.</p>
+      </div>
+      <nav class="flex gap-4 text-sm">
+        <a class="nav-link" href="/">Dashboard</a>
+        <a class="nav-link" href="/settings">Settings</a>
+        <a class="nav-link" href="/history">History</a>
+      </nav>
+    </header>
+
+    <section class="panel">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-xl font-semibold">Past Generations</h2>
+        <button id="refreshHistory" class="btn-ghost">Refresh</button>
+      </div>
+      <div id="historyList" class="grid grid-cols-1 gap-4"></div>
+    </section>
+
+    <section class="panel mt-8">
+      <h2 class="text-xl font-semibold mb-4">Execution Logs</h2>
+      <div id="historyLogs" class="log-window" data-limit="2000"></div>
+    </section>
+  </div>
+</body>
+</html>

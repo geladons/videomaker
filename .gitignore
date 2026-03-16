@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+
+# Virtual env
+.venv/
+.venv*/
+venv/
+
+# Logs
+*.log
+last.log
+
+# SQLite
+*.db
+
+# Local data and outputs
+data/
+outputs/
+workspaces/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Models (kept outside repo by default)
+/models/

@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Video Generator</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/static/styles.css" />
+  <script defer src="/static/app.js"></script>
+</head>
+<body class="min-h-screen">
+  <div class="hero-gradient"></div>
+  <div class="relative z-10 max-w-7xl mx-auto px-6 py-10">
+    <header class="flex items-center justify-between mb-10">
+      <div>
+        <p class="text-xs uppercase tracking-[0.3em] text-amber-300">Autonomous Pipeline</p>
+        <h1 class="text-4xl font-semibold">Video Generator</h1>
+        <p class="text-slate-300 mt-2">Prompt in. Fully edited MP4 out. Local-only, FIFO-safe.</p>
+      </div>
+      <nav class="flex gap-4 text-sm">
+        <a class="nav-link" href="/">Dashboard</a>
+        <a class="nav-link" href="/settings">Settings</a>
+        <a class="nav-link" href="/history">History</a>
+      </nav>
+    </header>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <section class="panel lg:col-span-2">
+        <h2 class="text-xl font-semibold mb-4">Generation Dashboard</h2>
+        <div class="space-y-6">
+          <div>
+            <label class="label">Main Video Prompt</label>
+            <textarea id="prompt" class="input h-40" placeholder="Describe the video you want... (tone, visuals, story, pacing)"></textarea>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label class="label">Video Format</label>
+              <select id="format" class="input">
+                <option value="16:9">16:9 (Landscape/YouTube)</option>
+                <option value="9:16">9:16 (Portrait/Shorts)</option>
+              </select>
+            </div>
+            <div>
+              <label class="label">Target Language</label>
+              <select id="language" class="input">
+                <option>English</option>
+                <option>Spanish</option>
+                <option>Russian</option>
+                <option>German</option>
+                <option>French</option>
+                <option>Italian</option>
+                <option>Portuguese</option>
+              </select>
+            </div>
+            <div>
+              <label class="label">Target Duration (sec)</label>
+              <input id="duration" type="number" min="5" max="300" value="30" class="input" />
+            </div>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <label class="toggle">
+              <input id="add_music" type="checkbox" checked />
+              <span>Add Background Music</span>
+            </label>
+            <label class="toggle">
+              <input id="add_greeting" type="checkbox" />
+              <span>Add Greeting</span>
+            </label>
+            <label class="toggle">
+              <input id="add_closing" type="checkbox" />
+              <span>Add Closing</span>
+            </label>
+            <label class="toggle">
+              <input id="use_stock_video" type="checkbox" checked />
+              <span>Use Stock Video Backgrounds</span>
+            </label>
+            <label class="toggle">
+              <input id="use_images" type="checkbox" checked />
+              <span>Generate Overlay Images</span>
+            </label>
+            <label class="toggle">
+              <input id="burn_subtitles" type="checkbox" checked />
+              <span>Burn Subtitles</span>
+            </label>
+          </div>
+          <div class="flex flex-col md:flex-row md:items-center gap-4">
+            <button id="generateBtn" class="btn-primary">Generate</button>
+            <div class="flex-1">
+              <div class="label">Active Task Progress</div>
+              <div class="progress-bar">
+                <div id="progressFill" class="progress-fill" style="width: 0%"></div>
+              </div>
+            </div>
+            <div id="taskStatus" class="text-sm text-emerald-300">Idle</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2 class="text-xl font-semibold mb-4">Live Logs</h2>
+        <div class="log-window" id="logWindow" data-limit="2000"></div>
+      </section>
+    </div>
+
+    <section class="panel mt-8">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-xl font-semibold">Recent Tasks</h2>
+        <button id="refreshTasks" class="btn-ghost">Refresh</button>
+      </div>
+      <div id="taskList" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+    </section>
+  </div>
+</body>
+</html>

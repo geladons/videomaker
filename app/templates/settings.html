@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Video Generator Settings</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/static/styles.css" />
+  <script defer src="/static/app.js"></script>
+</head>
+<body class="min-h-screen">
+  <div class="hero-gradient"></div>
+  <div class="relative z-10 max-w-6xl mx-auto px-6 py-10">
+    <header class="flex items-center justify-between mb-10">
+      <div>
+        <p class="text-xs uppercase tracking-[0.3em] text-amber-300">Control Room</p>
+        <h1 class="text-4xl font-semibold">Settings</h1>
+        <p class="text-slate-300 mt-2">Tune the model, video style, and voices.</p>
+      </div>
+      <nav class="flex gap-4 text-sm">
+        <a class="nav-link" href="/">Dashboard</a>
+        <a class="nav-link" href="/settings">Settings</a>
+        <a class="nav-link" href="/history">History</a>
+      </nav>
+    </header>
+
+    <section class="panel space-y-8">
+      <div class="flex flex-wrap gap-2 text-sm">
+        <a class="btn-ghost" href="#ollama">Writer</a>
+        <a class="btn-ghost" href="#planner">Planner</a>
+        <a class="btn-ghost" href="#helper">Helper</a>
+        <a class="btn-ghost" href="#vision">Vision</a>
+        <a class="btn-ghost" href="#video">Video</a>
+        <a class="btn-ghost" href="#narration">Narration</a>
+        <a class="btn-ghost" href="#tts">TTS</a>
+        <a class="btn-ghost" href="#pipeline">Pipeline</a>
+        <a class="btn-ghost" href="#scraper">Scraper</a>
+      </div>
+
+      <div>
+        <h2 id="ollama" class="text-xl font-semibold mb-4">Writer / Narration LLM</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="label">API URL</label>
+            <input id="ollama_api_url" class="input" />
+          </div>
+          <div>
+            <label class="label">Model</label>
+            <div class="flex gap-2">
+              <select id="ollama_model" class="input"></select>
+              <button id="refreshOllamaModels" class="btn-ghost">Refresh</button>
+            </div>
+          </div>
+          <div>
+            <label class="label">Timeout (sec)</label>
+            <input id="ollama_timeout" type="number" class="input" />
+          </div>
+          <div>
+            <label class="label">Request Delay (sec)</label>
+            <input id="ollama_request_delay" type="number" step="0.1" class="input" />
+          </div>
+          <label class="toggle md:col-span-2">
+            <input id="ollama_think" type="checkbox" />
+            <span>Enable Reasoning Output (think)</span>
+          </label>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+          <div>
+            <label class="label">Context (num_ctx)</label>
+            <input id="num_ctx" type="number" class="input" />
+          </div>
+          <div>
+            <label class="label">Threads (num_thread)</label>
+            <input id="num_thread" type="number" class="input" />
+          </div>
+          <div>
+            <label class="label">Temperature (temperature)</label>
+            <input id="temperature" type="number" step="0.1" class="input" />
+          </div>
+          <div>
+            <label class="label">Top K (top_k)</label>
+            <input id="top_k" type="number" class="input" />
+          </div>
+          <div>
+            <label class="label">Top P (top_p)</label>
+            <input id="top_p" type="number" step="0.05" class="input" />
+          </div>
+          <div>
+            <label class="label">Repeat Penalty (repeat_penalty)</label>
+            <input id="repeat_penalty" type="number" step="0.05" class="input" />
+          </div>
+          <div>
+            <label class="label">Num Predict (num_predict)</label>
+            <input id="num_predict" type="number" class="input" />
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h2 id="planner" class="text-xl font-semibold mb-4">Planner / Orchestrator LLM</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="label">API URL</label>
+            <input id="planner_api_url" class="input" />
+          </div>
+          <div>
+            <label class="label">Model</label>
+            <div class="flex gap-2">
+              <select id="planner_model" class="input"></select>
+              <button id="refreshPlannerModels" class="btn-ghost">Refresh</button>
+            </div>
+          </div>
+          <div>
+            <label class="label">Timeout (sec)</label>
+            <input id="planner_timeout" type="number" class="input" />
+          </div>
+          <label class="toggle md:col-span-2">
+            <input id="planner_think" type="checkbox" />
+            <span>Enable Reasoning Output (think)</span>
+          </label>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+          <div>
+            <label class="label">Context (num_ctx)</label>
+            <input id="planner_num_ctx" type="number" class="input" />
+          </div>
+          <div>
+            <label class="label">Threads (num_thread)</label>
+            <input id="planner_num_thread" type="number" class="input" />
+          </div>
+          <div>
+            <label class="label">Temperature (temperature)</label>
+            <input id="planner_temperature" type="number" step="0.1" class="input" />
+          </div>
+          <div>
+            <label class="label">Top K (top_k)</label>
+            <input id="planner_top_k" type="number" class="input" />
+          </div>
+          <div>
+            <label class="label">Top P (top_p)</label>
+            <input id="planner_top_p" type="number" step="0.05" class="input" />
+          </div>
+          <div>
+            <label class="label">Repeat Penalty (repeat_penalty)</label>
+            <input id="planner_repeat_penalty" type="number" step="0.05" class="input" />
+          </div>
+          <div>
+            <label class="label">Num Predict (num_predict)</label>
+            <input id="planner_num_predict" type="number" class="input" />
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h2 id="helper" class="text-xl font-semibold mb-4">AI Helper (JSON Repair)</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="label">API URL</label>
+            <input id="helper_api_url" class="input" />
+          </div>
+          <div>
+            <label class="label">Model</label>
+            <div class="flex gap-2">
+              <select id="helper_model" class="input"></select>
+              <button id="refreshHelperModels" class="btn-ghost">Refresh</button>
+            </div>
+          </div>
+          <div>
+            <label class="label">Timeout (sec)</label>
+            <input id="helper_timeout" type="number" class="input" />
+          </div>
+          <label class="toggle md:col-span-2">
+            <input id="helper_think" type="checkbox" />
+            <span>Enable Reasoning Output (think)</span>
+          </label>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+          <div>
+            <label class="label">Context (num_ctx)</label>
+            <input id="helper_num_ctx" type="number" class="input" />
+          </div>
+          <div>
+            <label class="label">Threads (num_thread)</label>
+            <input id="helper_num_thread" type="number" class="input" />
+          </div>
+          <div>
+            <label class="label">Temperature (temperature)</label>
+            <input id="helper_temperature" type="number" step="0.1" class="input" />
+          </div>
+          <div>
+            <label class="label">Top K (top_k)</label>
+            <input id="helper_top_k" type="number" class="input" />
+          </div>
+          <div>
+            <label class="label">Top P (top_p)</label>
+            <input id="helper_top_p" type="number" step="0.05" class="input" />
+          </div>
+          <div>
+            <label class="label">Repeat Penalty (repeat_penalty)</label>
+            <input id="helper_repeat_penalty" type="number" step="0.05" class="input" />
+          </div>
+          <div>
+            <label class="label">Num Predict (num_predict)</label>
+            <input id="helper_num_predict" type="number" class="input" />
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h2 id="vision" class="text-xl font-semibold mb-4">Vision (qwen3-vl)</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="label">API URL</label>
+            <input id="vision_api_url" class="input" />
+          </div>
+          <div>
+            <label class="label">Model</label>
+            <div class="flex gap-2">
+              <select id="vision_model" class="input"></select>
+              <button id="refreshVisionModels" class="btn-ghost">Refresh</button>
+            </div>
+          </div>
+          <div>
+            <label class="label">Timeout (sec)</label>
+            <input id="vision_timeout" type="number" class="input" />
+          </div>
+          <label class="toggle md:col-span-2">
+            <input id="vision_think" type="checkbox" />
+            <span>Enable Reasoning Output (think)</span>
+          </label>
+          <label class="toggle md:col-span-2">
+            <input id="vision_enabled" type="checkbox" />
+            <span>Enable Vision Analysis</span>
+          </label>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+          <div>
+            <label class="label">Context (num_ctx)</label>
+            <input id="vision_num_ctx" type="number" class="input" />
+          </div>
+          <div>
+            <label class="label">Threads (num_thread)</label>
+            <input id="vision_num_thread" type="number" class="input" />
+          </div>
+          <div>
+            <label class="label">Temperature (temperature)</label>
+            <input id="vision_temperature" type="number" step="0.1" class="input" />
+          </div>
+          <div>
+            <label class="label">Top K (top_k)</label>
+            <input id="vision_top_k" type="number" class="input" />
+          </div>
+          <div>
+            <label class="label">Top P (top_p)</label>
+            <input id="vision_top_p" type="number" step="0.05" class="input" />
+          </div>
+          <div>
+            <label class="label">Repeat Penalty (repeat_penalty)</label>
+            <input id="vision_repeat_penalty" type="number" step="0.05" class="input" />
+          </div>
+          <div>
+            <label class="label">Num Predict (num_predict)</label>
+            <input id="vision_num_predict" type="number" class="input" />
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h2 id="video" class="text-xl font-semibold mb-4">Video Defaults</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="label">Landscape Resolution</label>
+            <input id="resolution_landscape" class="input" placeholder="1280x720" />
+          </div>
+          <div>
+            <label class="label">Portrait Resolution</label>
+            <input id="resolution_portrait" class="input" placeholder="720x1280" />
+          </div>
+          <div>
+            <label class="label">FPS</label>
+            <input id="fps" type="number" class="input" />
+          </div>
+          <div>
+            <label class="label">Font Name</label>
+            <input id="font_name" class="input" placeholder="Inter" />
+          </div>
+          <div>
+            <label class="label">Font Size</label>
+            <input id="font_size" type="number" class="input" />
+          </div>
+          <div>
+            <label class="label">Font Color (ASS)</label>
+            <input id="font_color" class="input" placeholder="&H00FFFFFF" />
+          </div>
+          <div>
+            <label class="label">Outline Color (ASS)</label>
+            <input id="outline_color" class="input" placeholder="&H00000000" />
+          </div>
+          <div>
+            <label class="label">Outline</label>
+            <input id="outline" type="number" class="input" />
+          </div>
+          <div>
+            <label class="label">Shadow</label>
+            <input id="shadow" type="number" class="input" />
+          </div>
+          <div>
+            <label class="label">Subtitle Position</label>
+            <select id="subtitle_position" class="input">
+              <option value="bottom">Bottom</option>
+              <option value="center">Center</option>
+              <option value="top">Top</option>
+            </select>
+          </div>
+          <div>
+            <label class="label">Subtitle Margin X</label>
+            <input id="subtitle_margin_x" type="number" class="input" />
+          </div>
+          <div>
+            <label class="label">Subtitle Margin Y</label>
+            <input id="subtitle_margin_y" type="number" class="input" />
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h2 id="narration" class="text-xl font-semibold mb-4">Narration Defaults</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="label">Target Words per Second</label>
+            <input id="voiceover_wps" type="number" step="0.1" class="input" />
+          </div>
+          <p class="text-sm text-slate-400 md:col-span-2">
+            Controls how long each scene voiceover should be based on its duration.
+          </p>
+        </div>
+      </div>
+
+      <div>
+        <h2 id="tts" class="text-xl font-semibold mb-4">TTS Voice</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="label">TTS Engine</label>
+            <select id="tts_engine" class="input">
+              <option value="piper">Piper (default)</option>
+              <option value="coqui">Coqui TTS (higher quality)</option>
+            </select>
+          </div>
+          <div>
+            <label class="label">Coqui Model</label>
+            <input id="coqui_model" class="input" placeholder="tts_models/en/vctk/vits" />
+          </div>
+          <div>
+            <label class="label">Coqui Speaker (optional)</label>
+            <input id="coqui_speaker" class="input" placeholder="p225" />
+          </div>
+          <div>
+            <label class="label">Voice Model Path</label>
+            <input id="tts_voice_path" class="input" placeholder="/models/piper/en_US-lessac-medium.onnx" />
+          </div>
+          <div>
+            <label class="label">Voice Config Path</label>
+            <input id="tts_voice_config" class="input" placeholder="/models/piper/en_US-lessac-medium.onnx.json" />
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h2 id="pipeline" class="text-xl font-semibold mb-4">Pipeline Defaults</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <label class="toggle">
+            <input id="default_add_music" type="checkbox" />
+            <span>Add Background Music</span>
+          </label>
+          <label class="toggle">
+            <input id="default_add_greeting" type="checkbox" />
+            <span>Add Greeting</span>
+          </label>
+          <label class="toggle">
+            <input id="default_add_closing" type="checkbox" />
+            <span>Add Closing</span>
+          </label>
+          <label class="toggle">
+            <input id="default_use_stock_video" type="checkbox" />
+            <span>Use Stock Video Backgrounds</span>
+          </label>
+          <label class="toggle">
+            <input id="default_use_images" type="checkbox" />
+            <span>Generate Overlay Images</span>
+          </label>
+          <label class="toggle">
+            <input id="default_burn_subtitles" type="checkbox" />
+            <span>Burn Subtitles</span>
+          </label>
+        </div>
+      </div>
+
+      <div>
+        <h2 id="scraper" class="text-xl font-semibold mb-4">Scraper / Rate Limits</h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label class="label">Request Delay (sec)</label>
+            <input id="scraper_request_delay" type="number" step="0.1" class="input" />
+          </div>
+          <div>
+            <label class="label">yt-dlp Sleep Min (sec)</label>
+            <input id="scraper_sleep_min" type="number" step="0.1" class="input" />
+          </div>
+          <div>
+            <label class="label">yt-dlp Sleep Max (sec)</label>
+            <input id="scraper_sleep_max" type="number" step="0.1" class="input" />
+          </div>
+          <div>
+            <label class="label">yt-dlp Search Count</label>
+            <input id="scraper_search_count" type="number" class="input" />
+          </div>
+          <div>
+            <label class="label">Image Delay (sec)</label>
+            <input id="scraper_image_delay" type="number" step="0.1" class="input" />
+          </div>
+        </div>
+      </div>
+
+      <div class="flex justify-end">
+        <button id="saveSettings" class="btn-primary">Save Settings</button>
+      </div>
+      <p id="settingsStatus" class="text-sm text-emerald-300"></p>
+    </section>
+  </div>
+</body>
+</html>
