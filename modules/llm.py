@@ -45,6 +45,7 @@ Rules:
 class LLMError(Exception):
     pass
 
+
 LogFn = Callable[[str, str], Awaitable[None]]
 
 
@@ -56,7 +57,9 @@ async def _list_models(api_url: str) -> List[str]:
             data = response.json()
     except httpx.HTTPError:
         return []
-    models = [model.get("name") for model in data.get("models", []) if model.get("name")]
+    models = [
+        model.get("name") for model in data.get("models", []) if model.get("name")
+    ]
     return models
 
 
@@ -196,7 +199,7 @@ def _schema_hint() -> str:
         '"total_duration": number, '
         '"music_mood": string, '
         '"scenes": ['
-        '{'
+        "{"
         '"id": integer, '
         '"duration": number, '
         '"voiceover": string, '
@@ -232,7 +235,9 @@ def _fallback_timeline(prompt: str, target_duration: Optional[float]) -> Dict[st
     }
 
 
-def _parse_scene_lines(text: str, target_duration: Optional[float]) -> Optional[Dict[str, Any]]:
+def _parse_scene_lines(
+    text: str, target_duration: Optional[float]
+) -> Optional[Dict[str, Any]]:
     if not text:
         return None
     lines = []
@@ -335,7 +340,9 @@ async def _request_scene_lines(
         text = data.get("response", "") if isinstance(data, dict) else ""
         if log and text:
             await log("raw", f"Line-based planner raw response:\n{text}")
-            await log("info", f"Line-based planner raw response length: {len(text)} chars")
+            await log(
+                "info", f"Line-based planner raw response length: {len(text)} chars"
+            )
         parsed = _parse_scene_lines(text, target_duration)
         if not parsed and log:
             await log("error", "Line-based planner failed to parse response.")
@@ -349,7 +356,11 @@ async def _request_scene_lines(
 def _validate_timeline(data: Dict[str, Any]) -> None:
     if not isinstance(data, dict):
         raise LLMError("Timeline is not a JSON object")
-    if "scenes" not in data or not isinstance(data["scenes"], list) or not data["scenes"]:
+    if (
+        "scenes" not in data
+        or not isinstance(data["scenes"], list)
+        or not data["scenes"]
+    ):
         raise LLMError("Timeline missing scenes list")
     if not (3 <= len(data["scenes"]) <= 8):
         raise LLMError(f"Timeline must have 3-8 scenes, got {len(data['scenes'])}")
@@ -390,8 +401,12 @@ async def plan_timeline(
         if log:
             await log("info", f"Planner attempt {attempt}/3 (think={force_think})")
         if attempt >= 2:
-            attempt_options["temperature"] = min(float(attempt_options.get("temperature", 0.7)), 0.3)
-            attempt_options["num_predict"] = max(int(attempt_options.get("num_predict", 512)), 512)
+            attempt_options["temperature"] = min(
+                float(attempt_options.get("temperature", 0.7)), 0.3
+            )
+            attempt_options["num_predict"] = max(
+                int(attempt_options.get("num_predict", 512)), 512
+            )
             attempt_prompt = (
                 f"{base_prompt}\n\n"
                 "Additional constraints:\n"
@@ -406,12 +421,29 @@ async def plan_timeline(
         try:
             if request_delay > 0:
                 await asyncio.sleep(request_delay)
-            payload = _build_payload(attempt_prompt, model, attempt_options, force_json=True, think=force_think)
+            payload = _build_payload(
+                attempt_prompt,
+                model,
+                attempt_options,
+                force_json=True,
+                think=force_think,
+            )
             async with httpx.AsyncClient(timeout=timeout) as client:
                 response = await client.post(f"{api_url}/api/generate", json=payload)
-                if response.status_code in {400, 422} and "format" in response.text.lower():
-                    payload = _build_payload(attempt_prompt, model, attempt_options, force_json=False, think=force_think)
-                    response = await client.post(f"{api_url}/api/generate", json=payload)
+                if (
+                    response.status_code in {400, 422}
+                    and "format" in response.text.lower()
+                ):
+                    payload = _build_payload(
+                        attempt_prompt,
+                        model,
+                        attempt_options,
+                        force_json=False,
+                        think=force_think,
+                    )
+                    response = await client.post(
+                        f"{api_url}/api/generate", json=payload
+                    )
                 if response.status_code == 404:
                     models = await _list_models(api_url)
                     if models and model not in models:
@@ -431,7 +463,9 @@ async def plan_timeline(
                         text = ""
                     if log and raw_text:
                         await log("raw", f"LLM raw response:\n{raw_text}")
-                        await log("info", f"LLM raw response length: {len(raw_text)} chars")
+                        await log(
+                            "info", f"LLM raw response length: {len(raw_text)} chars"
+                        )
                         await log("info", f"LLM raw response preview: {raw_text[:300]}")
                     if log and raw_thinking:
                         await log("raw", f"LLM thinking:\n{raw_thinking}")
@@ -450,8 +484,13 @@ async def plan_timeline(
                     text = raw_text
             if raw_text and _looks_truncated_json(raw_text):
                 if log:
-                    await log("error", "Detected truncated JSON response; retrying with higher num_predict.")
-                merged_options["num_predict"] = max(int(merged_options.get("num_predict", 512)), 1536)
+                    await log(
+                        "error",
+                        "Detected truncated JSON response; retrying with higher num_predict.",
+                    )
+                merged_options["num_predict"] = max(
+                    int(merged_options.get("num_predict", 512)), 1536
+                )
                 raise LLMError("Truncated JSON response")
             timeline = _extract_json(text)
             if not timeline:
@@ -468,9 +507,12 @@ async def plan_timeline(
             helper_error = None
             if helper_settings and attempt >= 2:
                 if log:
-                    await log("info", "Deterministic repair failed; invoking AI helper.")
+                    await log(
+                        "info", "Deterministic repair failed; invoking AI helper."
+                    )
                 try:
                     from modules import ai_helper
+
                     if request_delay > 0:
                         await asyncio.sleep(max(0.2, request_delay))
                     helper_json = await ai_helper.repair_json(
@@ -492,7 +534,9 @@ async def plan_timeline(
                     if log:
                         await log("error", f"AI helper failed: {helper_exc}")
             elif log:
-                await log("info", "Deterministic repair failed; retrying without helper.")
+                await log(
+                    "info", "Deterministic repair failed; retrying without helper."
+                )
             err_text = str(exc).strip() if str(exc).strip() else repr(exc)
             last_error = err_text
             if helper_error:
@@ -500,9 +544,13 @@ async def plan_timeline(
             if log:
                 await log("error", f"LLM parse error: {type(exc).__name__}: {err_text}")
                 if raw_text:
-                    await log("error", f"LLM raw response (truncated): {raw_text[:400]}")
+                    await log(
+                        "error", f"LLM raw response (truncated): {raw_text[:400]}"
+                    )
                 if raw_thinking:
-                    await log("error", f"LLM thinking (truncated): {raw_thinking[:400]}")
+                    await log(
+                        "error", f"LLM thinking (truncated): {raw_thinking[:400]}"
+                    )
             base_prompt = (
                 f"{base_prompt}\n\n"
                 f"The previous JSON was invalid or incomplete. Error: {last_error}. "
@@ -529,7 +577,10 @@ async def plan_timeline(
             last_error = err_text
             if log:
                 await log("error", f"LLM parse error: {err_text}")
-                await log("error", f"Hint: increase Ollama timeout (current {timeout}s) or lower num_predict.")
+                await log(
+                    "error",
+                    f"Hint: increase Ollama timeout (current {timeout}s) or lower num_predict.",
+                )
             base_prompt = (
                 f"{base_prompt}\n\n"
                 f"The previous JSON was invalid or incomplete. Error: {last_error}. "
@@ -544,9 +595,13 @@ async def plan_timeline(
             if log:
                 await log("error", f"LLM parse error: {type(exc).__name__}: {err_text}")
                 if raw_text:
-                    await log("error", f"LLM raw response (truncated): {raw_text[:400]}")
+                    await log(
+                        "error", f"LLM raw response (truncated): {raw_text[:400]}"
+                    )
                 if raw_thinking:
-                    await log("error", f"LLM thinking (truncated): {raw_thinking[:400]}")
+                    await log(
+                        "error", f"LLM thinking (truncated): {raw_thinking[:400]}"
+                    )
             base_prompt = (
                 f"{base_prompt}\n\n"
                 f"The previous JSON was invalid or incomplete. Error: {last_error}. "
@@ -559,7 +614,10 @@ async def plan_timeline(
                 err_text = repr(exc)
             last_error = err_text
             if log:
-                await log("error", f"Unexpected planner error: {type(exc).__name__}: {err_text}")
+                await log(
+                    "error",
+                    f"Unexpected planner error: {type(exc).__name__}: {err_text}",
+                )
             base_prompt = (
                 f"{base_prompt}\n\n"
                 f"The previous JSON was invalid or incomplete. Error: {last_error}. "
@@ -584,6 +642,115 @@ async def plan_timeline(
     return _fallback_timeline(base_prompt, target_duration)
 
 
+async def generate_search_queries(
+    scene: Dict[str, Any],
+    asset_type: str,  # "video", "music", "image"
+    model: str,
+    options: Dict[str, Any],
+    api_url: str,
+    timeout: float,
+    request_delay: float = 0.8,
+    log: Optional[LogFn] = None,
+) -> List[str]:
+    """
+    Generate specialized search queries using AI (Ollama).
+    This replaces raw prompts with optimized queries for:
+    - video: optimized for stock video search
+    - music: optimized for background music search
+    - image: optimized for image search
+    """
+    visual_query = scene.get("visual_query", "")
+    voiceover = scene.get("voiceover", "")
+    overlay_text = scene.get("overlay_text", "")
+
+    # Build context from scene data
+    context = f"Visual: {visual_query}" if visual_query else ""
+    if voiceover:
+        context += f" | Voiceover: {voiceover}"
+    if overlay_text:
+        context += f" | Overlay: {overlay_text}"
+
+    # Create specialized prompts based on asset type
+    prompts = {
+        "video": (
+            "Generate 3 short search queries (3-6 words each) for finding stock video footage. "
+            "Return ONLY a JSON array of strings, nothing else.\n"
+            "Focus on: action, movement, background, atmosphere.\n"
+            f"Scene context: {context}"
+        ),
+        "music": (
+            "Generate 3 short search queries (2-4 words each) for finding background music. "
+            "Return ONLY a JSON array of strings, nothing else.\n"
+            "Focus on: mood, genre, tempo, atmosphere.\n"
+            f"Scene context: {context}"
+        ),
+        "image": (
+            "Generate 3 short search queries (2-5 words each) for finding images. "
+            "Return ONLY a JSON array of strings, nothing else.\n"
+            "Focus on: subject, style, composition.\n"
+            f"Scene context: {context}"
+        ),
+    }
+
+    prompt = prompts.get(asset_type, prompts["video"])
+    merged_options = {**options}
+    merged_options["num_predict"] = min(merged_options.get("num_predict", 256), 256)
+
+    try:
+        if request_delay > 0:
+            await asyncio.sleep(request_delay)
+
+        payload = {
+            "model": model,
+            "prompt": prompt,
+            "stream": False,
+            "options": merged_options,
+        }
+
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.post(f"{api_url}/api/generate", json=payload)
+            response.raise_for_status()
+            data = response.json()
+
+        text = data.get("response", "") if isinstance(data, dict) else ""
+
+        if log:
+            await log("raw", f"Search query generation ({asset_type}): {text[:200]}")
+
+        # Try to parse as JSON array
+        import json as json_module
+
+        try:
+            # Find JSON array in response
+            start = text.find("[")
+            end = text.rfind("]") + 1
+            if start != -1 and end > start:
+                queries = json_module.loads(text[start:end])
+                if isinstance(queries, list) and queries:
+                    return [str(q).strip() for q in queries if q]
+        except (json_module.JSONDecodeError, ValueError, AttributeError):
+            pass
+
+        # Fallback: extract queries from text
+        queries = []
+        for line in text.split("\n"):
+            line = line.strip().strip("- ").strip().strip('"').strip("'")
+            if line and len(line) > 2:
+                queries.append(line)
+        if queries:
+            return queries[:3]
+
+    except Exception as exc:
+        if log:
+            await log("error", f"Search query generation failed ({asset_type}): {exc}")
+
+    # Ultimate fallback - return simplified version of visual_query
+    if visual_query:
+        words = visual_query.split()[:5]
+        return [" ".join(words)]
+    return []
+
+
 def _clean_voiceover_text(text: str) -> str:
     if not text:
         return ""
@@ -595,7 +762,9 @@ def _clean_voiceover_text(text: str) -> str:
                 cleaned = str(data.get("voiceover", "")).strip()
         except Exception:
             pass
-    cleaned = re.sub(r"^(narrator|voiceover)\s*[:\-]+\s*", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(
+        r"^(narrator|voiceover)\s*[:\-]+\s*", "", cleaned, flags=re.IGNORECASE
+    )
     cleaned = cleaned.strip().strip('"').strip("'")
     cleaned = re.sub(r"\s+", " ", cleaned)
     return cleaned
@@ -626,7 +795,12 @@ async def generate_voiceover(
     min_words = max(10, int(target_words * 0.7))
     max_words = max(min_words + 4, int(target_words * 1.3))
 
-    base_outline = scene.get("voiceover") or scene.get("overlay_text") or scene.get("visual_query") or ""
+    base_outline = (
+        scene.get("voiceover")
+        or scene.get("overlay_text")
+        or scene.get("visual_query")
+        or ""
+    )
     visual_query = scene.get("visual_query") or ""
     overlay_text = scene.get("overlay_text") or ""
 
@@ -642,7 +816,9 @@ async def generate_voiceover(
         greeting_hint = ""
         closing_hint = ""
         if add_greeting and is_first:
-            greeting_hint = "Include a short, friendly greeting to the audience at the beginning.\n"
+            greeting_hint = (
+                "Include a short, friendly greeting to the audience at the beginning.\n"
+            )
         if add_closing and is_last:
             closing_hint = "Include a short, friendly closing line at the end.\n"
 
@@ -661,8 +837,7 @@ async def generate_voiceover(
             word_count = _word_count(last_text)
             prompt = (
                 f"The previous narration had {word_count} words. "
-                f"Please rewrite to about {target_words} words.\n\n"
-                + prompt
+                f"Please rewrite to about {target_words} words.\n\n" + prompt
             )
 
         payload: Dict[str, Any] = {
@@ -694,7 +869,10 @@ async def generate_voiceover(
                 await log("raw", f"Writer thinking:\n{raw_thinking}")
             if not raw_text and raw_thinking and force_think:
                 if log:
-                    await log("error", "Writer model returned empty response with reasoning output; retrying without thinking.")
+                    await log(
+                        "error",
+                        "Writer model returned empty response with reasoning output; retrying without thinking.",
+                    )
                 force_think = False
                 continue
             cleaned = _clean_voiceover_text(raw_text)

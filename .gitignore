@@ -22,6 +22,11 @@ data/
 outputs/
 workspaces/
 
+# Environment variables (secrets)
+.env
+.env.local
+.env.*.local
+
 # OS / editor
 .DS_Store
 .idea/
@@ -29,3 +34,7 @@ workspaces/
 
 # Models (kept outside repo by default)
 /models/
+
+# Database
+*.sqlite
+*.sqlite3

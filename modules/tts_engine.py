@@ -8,8 +8,36 @@ from config import LANGUAGE_TO_PIPER, MODELS_DIR, PIPER_VOICE_CONFIG, PIPER_VOIC
 
 LogFn = Callable[[str, str], Awaitable[None]]
 
+# VCTK speaker IDs - p225-p335 are available
+DEFAULT_VCTK_SPEAKERS = [
+    "p225",
+    "p226",
+    "p227",
+    "p228",  # Common English speakers
+]
 
-async def _run_piper(text: str, model_path: str, config_path: Optional[str], out_path: str, log: LogFn) -> int:
+# Fallback speakers for different languages
+LANGUAGE_SPEAKERS = {
+    "English": "p226",  # Male voice
+    "Spanish": "p225",
+    "German": "p225",
+    "French": "p225",
+    "Italian": "p225",
+    "Portuguese": "p225",
+    "Russian": "p225",  # Use English speaker as fallback
+}
+
+
+def _get_default_speaker(language: Optional[str] = None) -> str:
+    """Get a default speaker ID based on language."""
+    if language:
+        return LANGUAGE_SPEAKERS.get(language, DEFAULT_VCTK_SPEAKERS[0])
+    return DEFAULT_VCTK_SPEAKERS[0]
+
+
+async def _run_piper(
+    text: str, model_path: str, config_path: Optional[str], out_path: str, log: LogFn
+) -> int:
     cmd = ["piper", "--model", model_path, "--output_file", out_path]
     if config_path and os.path.exists(config_path):
         cmd.extend(["--config", config_path])
@@ -17,7 +45,7 @@ async def _run_piper(text: str, model_path: str, config_path: Optional[str], out
     env = os.environ.copy()
     cpu_count = os.cpu_count() or 4
     env.setdefault("OMP_NUM_THREADS", str(cpu_count))
-    env.setdefault("ORT_DISABLE_CPU_AFFINITY", "1")
+    env.setdefault("ORT_DISABLE_CPU_EMT", "1")
 
     await log("info", f"$ {' '.join(cmd)}")
     process = await asyncio.create_subprocess_exec(
@@ -33,25 +61,44 @@ async def _run_piper(text: str, model_path: str, config_path: Optional[str], out
         await process.stdin.drain()
         process.stdin.close()
 
-    async def _stream(reader: asyncio.StreamReader, level: str) -> None:
-        while True:
-            line = await reader.readline()
-            if not line:
-                break
-            msg = line.decode(errors="ignore").rstrip()
-            if msg:
-                lowered = msg.lower()
-                if "error" in lowered or "failed" in lowered:
-                    await log("error", msg)
-                elif "warn" in lowered:
-                    await log("warn", msg)
-                else:
-                    await log(level, msg)
+    stdout_lines = []
+    stderr_lines = []
 
-    await asyncio.gather(
-        _stream(process.stdout, "info"),
-        _stream(process.stderr, "error"),
-    )
+    while True:
+        if process.stdout:
+            line = await process.stdout.readline()
+            if line:
+                msg = line.decode(errors="ignore").rstrip()
+                if msg:
+                    stdout_lines.append(msg)
+            else:
+                break
+        else:
+            break
+
+    while True:
+        if process.stderr:
+            line = await process.stderr.readline()
+            if line:
+                msg = line.decode(errors="ignore").rstrip()
+                if msg:
+                    stderr_lines.append(msg)
+            else:
+                break
+        else:
+            break
+
+    for msg in stdout_lines:
+        await log("info", msg)
+    for msg in stderr_lines:
+        lowered = msg.lower()
+        if "error" in lowered or "failed" in lowered:
+            await log("error", msg)
+        elif "warn" in lowered:
+            await log("warn", msg)
+        else:
+            await log("info", msg)
+
     return await process.wait()
 
 
@@ -66,31 +113,90 @@ async def generate_voiceovers(
     coqui_model: Optional[str] = None,
     coqui_speaker: Optional[str] = None,
 ) -> List[str]:
+    """
+    Generate voiceovers with fallback mechanism.
+    Validates input text and handles TTS engine failures gracefully.
+    """
     os.makedirs(out_dir, exist_ok=True)
-    if engine == "coqui":
-        await log("info", "TTS engine set to Coqui.")
-        return await _generate_coqui(
-            texts,
-            out_dir,
-            log,
-            model_name=coqui_model,
-            speaker=coqui_speaker,
-            fallback_voice=(voice_path, voice_config, language),
-        )
-    await log("info", "TTS engine set to Piper.")
-    resolved_voice, resolved_config, note = _resolve_voice(language, voice_path, voice_config)
-    if note:
-        await log("info", note)
 
-    outputs: List[str] = []
+    # Validate inputs
+    if not texts:
+        await log("warn", "No texts provided for voiceover generation")
+        return []
+
+    # Clean and validate each text
+    valid_texts: List[str] = []
     for idx, text in enumerate(texts, start=1):
-        out_path = os.path.join(out_dir, f"voice_{idx}.wav")
-        await log("info", f"Generating voiceover {idx}/{len(texts)}")
-        code = await _run_piper(text, resolved_voice, resolved_config, out_path, log)
-        if code != 0:
-            raise RuntimeError(f"Piper failed for segment {idx} with exit code {code}")
-        outputs.append(out_path)
-    return outputs
+        if not text or not text.strip():
+            await log("warn", f"Skipping empty text at index {idx}")
+            continue
+        cleaned = text.strip()
+        if len(cleaned) < 3:
+            await log("warn", f"Skipping too short text at index {idx}: '{cleaned}'")
+            continue
+        valid_texts.append(cleaned)
+
+    if not valid_texts:
+        await log("error", "No valid texts after filtering")
+        return []
+
+    # Try primary engine (Coqui or Piper)
+    primary_engine = engine.lower() if engine else "piper"
+
+    if primary_engine == "coqui":
+        await log(
+            "info",
+            f"TTS engine set to Coqui (model={coqui_model}, speaker={coqui_speaker or 'auto'})",
+        )
+        try:
+            return await _generate_coqui(
+                valid_texts,
+                out_dir,
+                log,
+                model_name=coqui_model,
+                speaker=coqui_speaker,
+                language=language,
+            )
+        except Exception as exc:
+            await log("error", f"Coqui TTS failed: {exc}. Falling back to Piper.")
+            primary_engine = "piper"
+
+    if primary_engine == "piper" or primary_engine not in ("coqui", "piper"):
+        await log("info", "TTS engine set to Piper.")
+        resolved_voice, resolved_config, note = _resolve_voice(
+            language, voice_path, voice_config
+        )
+        if note:
+            await log("info", note)
+
+        outputs: List[str] = []
+        for idx, text in enumerate(valid_texts, start=1):
+            out_path = os.path.join(out_dir, f"voice_{idx}.wav")
+            await log("info", f"Generating voiceover {idx}/{len(valid_texts)}")
+            try:
+                code = await _run_piper(
+                    text, resolved_voice, resolved_config, out_path, log
+                )
+                if code != 0:
+                    raise RuntimeError(
+                        f"Piper failed for segment {idx} with exit code {code}"
+                    )
+                outputs.append(out_path)
+            except Exception as exc:
+                await log("error", f"Piper failed for segment {idx}: {exc}")
+                continue
+
+        if outputs and len(outputs) == len(valid_texts):
+            return outputs
+        elif outputs:
+            await log("warn", f"Generated {len(outputs)}/{len(valid_texts)} voiceovers")
+            return outputs
+        else:
+            raise RuntimeError("All voiceover generation attempts failed")
+
+    # Ultimate fallback - return empty list
+    await log("error", "All TTS engines failed")
+    return []
 
 
 _coqui_cache = {}
@@ -102,36 +208,84 @@ async def _generate_coqui(
     log: LogFn,
     model_name: Optional[str],
     speaker: Optional[str],
-    fallback_voice: Tuple[Optional[str], Optional[str], Optional[str]],
+    language: Optional[str],
 ) -> List[str]:
+    """
+    Generate voiceovers using Coqui TTS with comprehensive error handling.
+    Falls back to Piper if Coqui fails.
+    """
     try:
         from TTS.api import TTS  # type: ignore
     except Exception as exc:
         await log("error", f"Coqui TTS not available ({exc}); falling back to Piper.")
-        voice_path, voice_config, language = fallback_voice
         return await generate_voiceovers(
             texts,
             out_dir,
             log,
-            voice_path=voice_path,
-            voice_config=voice_config,
             language=language,
             engine="piper",
         )
 
+    # Use default model if none specified
     model_name = model_name or "tts_models/en/vctk/vits"
+
+    # Get speaker - use default if not specified
+    # VCTK model REQUIRES a speaker ID
+    if not speaker:
+        speaker = _get_default_speaker(language)
+
+    await log("info", f"Using Coqui with speaker: {speaker}")
+
+    # Check cache
     tts = _coqui_cache.get(model_name)
     if tts is None:
         await log("info", f"Loading Coqui TTS model: {model_name}")
-        tts = TTS(model_name=model_name, progress_bar=False, gpu=False)
-        _coqui_cache[model_name] = tts
+        try:
+            tts = TTS(model_name=model_name, progress_bar=False, gpu=False)
+            _coqui_cache[model_name] = tts
+        except Exception as exc:
+            await log("error", f"Failed to load Coqui model {model_name}: {exc}")
+            return await generate_voiceovers(
+                texts,
+                out_dir,
+                log,
+                language=language,
+                engine="piper",
+            )
 
     outputs: List[str] = []
+
     for idx, text in enumerate(texts, start=1):
         out_path = os.path.join(out_dir, f"voice_{idx}.wav")
-        await log("info", f"Generating voiceover {idx}/{len(texts)} with Coqui")
-        await asyncio.to_thread(tts.tts_to_file, text=text, file_path=out_path, speaker=speaker or None)
-        outputs.append(out_path)
+        await log(
+            "info",
+            f"Generating voiceover {idx}/{len(texts)} with Coqui (speaker={speaker})",
+        )
+        try:
+            await asyncio.to_thread(
+                tts.tts_to_file, text=text, file_path=out_path, speaker=speaker
+            )
+            if os.path.exists(out_path) and os.path.getsize(out_path) > 0:
+                outputs.append(out_path)
+                await log("info", f"Coqui generated: {out_path}")
+            else:
+                await log("warn", f"Coqui did not create output file for segment {idx}")
+        except Exception as exc:
+            await log("error", f"Coqui failed for segment {idx}: {exc}")
+            continue
+
+    if not outputs:
+        await log(
+            "error", "Coqui failed to generate any voiceovers, falling back to Piper"
+        )
+        return await generate_voiceovers(
+            texts,
+            out_dir,
+            log,
+            language=language,
+            engine="piper",
+        )
+
     return outputs
 
 
@@ -161,7 +315,11 @@ def _resolve_voice(
 
     if os.path.exists(PIPER_VOICE_PATH):
         config = _pick_config(PIPER_VOICE_PATH, PIPER_VOICE_CONFIG)
-        return PIPER_VOICE_PATH, config, note or f"Using default voice: {PIPER_VOICE_PATH}"
+        return (
+            PIPER_VOICE_PATH,
+            config,
+            note or f"Using default voice: {PIPER_VOICE_PATH}",
+        )
 
     return voice_path or PIPER_VOICE_PATH, voice_config or PIPER_VOICE_CONFIG, note
 

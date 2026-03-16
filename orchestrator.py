@@ -74,7 +74,9 @@ class Orchestrator:
         if level.lower() in {"raw", "debug"}:
             return
 
-        db_message = message if len(message) <= 2000 else message[:2000] + " ...[truncated]"
+        db_message = (
+            message if len(message) <= 2000 else message[:2000] + " ...[truncated]"
+        )
         await add_log(task_id, level, db_message)
         await self.log_callback(task_id, level, db_message)
 
@@ -112,28 +114,58 @@ class Orchestrator:
             writer_api_url = await get_setting("ollama_api_url", OLLAMA_API_URL)
             writer_timeout = await get_setting("ollama_timeout", 180)
             writer_think = await get_setting("ollama_think", False)
-            ollama_delay = await get_setting("ollama_request_delay", DEFAULT_OLLAMA_REQUEST_DELAY)
+            ollama_delay = await get_setting(
+                "ollama_request_delay", DEFAULT_OLLAMA_REQUEST_DELAY
+            )
 
-            planner_model = await get_setting("ollama_planner_model", DEFAULT_OLLAMA_PLANNER_MODEL)
-            planner_params = await get_setting("ollama_planner_params", DEFAULT_OLLAMA_PLANNER_PARAMS)
-            planner_api_url = await get_setting("ollama_planner_api_url", OLLAMA_API_URL)
-            planner_timeout = await get_setting("ollama_planner_timeout", DEFAULT_OLLAMA_PLANNER_TIMEOUT)
-            planner_think = await get_setting("ollama_planner_think", DEFAULT_OLLAMA_PLANNER_THINK)
+            planner_model = await get_setting(
+                "ollama_planner_model", DEFAULT_OLLAMA_PLANNER_MODEL
+            )
+            planner_params = await get_setting(
+                "ollama_planner_params", DEFAULT_OLLAMA_PLANNER_PARAMS
+            )
+            planner_api_url = await get_setting(
+                "ollama_planner_api_url", OLLAMA_API_URL
+            )
+            planner_timeout = await get_setting(
+                "ollama_planner_timeout", DEFAULT_OLLAMA_PLANNER_TIMEOUT
+            )
+            planner_think = await get_setting(
+                "ollama_planner_think", DEFAULT_OLLAMA_PLANNER_THINK
+            )
             scraper_settings = await get_setting("scraper_settings", DEFAULT_SCRAPER)
             helper_settings = {
                 "api_url": await get_setting("ollama_helper_api_url", OLLAMA_API_URL),
-                "model": await get_setting("ollama_helper_model", DEFAULT_OLLAMA_HELPER_MODEL),
-                "options": await get_setting("ollama_helper_params", DEFAULT_OLLAMA_HELPER_PARAMS),
-                "timeout": await get_setting("ollama_helper_timeout", DEFAULT_OLLAMA_HELPER_TIMEOUT),
-                "think": await get_setting("ollama_helper_think", DEFAULT_OLLAMA_HELPER_THINK),
+                "model": await get_setting(
+                    "ollama_helper_model", DEFAULT_OLLAMA_HELPER_MODEL
+                ),
+                "options": await get_setting(
+                    "ollama_helper_params", DEFAULT_OLLAMA_HELPER_PARAMS
+                ),
+                "timeout": await get_setting(
+                    "ollama_helper_timeout", DEFAULT_OLLAMA_HELPER_TIMEOUT
+                ),
+                "think": await get_setting(
+                    "ollama_helper_think", DEFAULT_OLLAMA_HELPER_THINK
+                ),
             }
             vision_settings = {
                 "api_url": await get_setting("ollama_vision_api_url", OLLAMA_API_URL),
-                "model": await get_setting("ollama_vision_model", DEFAULT_OLLAMA_VISION_MODEL),
-                "options": await get_setting("ollama_vision_params", DEFAULT_OLLAMA_VISION_PARAMS),
-                "timeout": await get_setting("ollama_vision_timeout", DEFAULT_OLLAMA_VISION_TIMEOUT),
-                "think": await get_setting("ollama_vision_think", DEFAULT_OLLAMA_VISION_THINK),
-                "enabled": await get_setting("ollama_vision_enabled", DEFAULT_OLLAMA_VISION_ENABLED),
+                "model": await get_setting(
+                    "ollama_vision_model", DEFAULT_OLLAMA_VISION_MODEL
+                ),
+                "options": await get_setting(
+                    "ollama_vision_params", DEFAULT_OLLAMA_VISION_PARAMS
+                ),
+                "timeout": await get_setting(
+                    "ollama_vision_timeout", DEFAULT_OLLAMA_VISION_TIMEOUT
+                ),
+                "think": await get_setting(
+                    "ollama_vision_think", DEFAULT_OLLAMA_VISION_THINK
+                ),
+                "enabled": await get_setting(
+                    "ollama_vision_enabled", DEFAULT_OLLAMA_VISION_ENABLED
+                ),
             }
             video_settings = await get_setting("video_settings", DEFAULT_VIDEO)
             voice_path = await get_setting("tts_voice_path", None)
@@ -141,7 +173,9 @@ class Orchestrator:
             tts_engine_name = await get_setting("tts_engine", DEFAULT_TTS_ENGINE)
             coqui_model = await get_setting("coqui_model", DEFAULT_COQUI_MODEL)
             coqui_speaker = await get_setting("coqui_speaker", DEFAULT_COQUI_SPEAKER)
-            voiceover_wps = await get_setting("voiceover_words_per_sec", DEFAULT_VOICEOVER_WPS)
+            voiceover_wps = await get_setting(
+                "voiceover_words_per_sec", DEFAULT_VOICEOVER_WPS
+            )
             try:
                 voiceover_wps = float(voiceover_wps)
             except (TypeError, ValueError):
@@ -175,13 +209,21 @@ class Orchestrator:
 
             timeline_preview = json.dumps(timeline, ensure_ascii=False)
             await self._log(task_id, "info", f"LLM timeline: {timeline_preview[:500]}")
-            await self._log(task_id, "raw", f"LLM timeline (full): {json.dumps(timeline, ensure_ascii=False, indent=2)}")
+            await self._log(
+                task_id,
+                "raw",
+                f"LLM timeline (full): {json.dumps(timeline, ensure_ascii=False, indent=2)}",
+            )
 
             for scene in scenes:
                 if not scene.get("overlay_text"):
-                    scene["overlay_text"] = (scene.get("visual_query") or scene.get("voiceover") or "").strip()
+                    scene["overlay_text"] = (
+                        scene.get("visual_query") or scene.get("voiceover") or ""
+                    ).strip()
 
-            await self._log(task_id, "info", "Generating scene voiceovers with Writer LLM")
+            await self._log(
+                task_id, "info", "Generating scene voiceovers with Writer LLM"
+            )
             for idx, scene in enumerate(scenes, start=1):
                 duration = float(scene.get("duration", 0) or 0)
                 target_words = max(12, int(duration * voiceover_wps))
@@ -208,15 +250,36 @@ class Orchestrator:
                         "info",
                         f"Voiceover {idx}/{len(scenes)}: {len(voice_text.split())} words",
                     )
-                    await self._log(task_id, "info", f"Voiceover text {idx}: {voice_text[:300]}")
-                    await self._log(task_id, "raw", f"Voiceover text {idx} (full): {voice_text}")
+                    await self._log(
+                        task_id, "info", f"Voiceover text {idx}: {voice_text[:300]}"
+                    )
+                    await self._log(
+                        task_id, "raw", f"Voiceover text {idx} (full): {voice_text}"
+                    )
                 except Exception as exc:
-                    await self._log(task_id, "error", f"Voiceover generation failed for scene {idx}: {exc}")
+                    await self._log(
+                        task_id,
+                        "error",
+                        f"Voiceover generation failed for scene {idx}: {exc}",
+                    )
                     scene["voiceover"] = scene.get("voiceover", "")
 
             use_stock_video = bool(options.get("use_stock_video", True))
             use_images = bool(options.get("use_images", True))
             fallback_topic = prompt.splitlines()[0].strip() if prompt else None
+
+            # Ensure music directory exists BEFORE download
+            music_dir = os.path.join(workspace, "music")
+            os.makedirs(music_dir, exist_ok=True)
+
+            # Ensure music directory exists BEFORE download (double safety)
+            music_dir = os.path.join(workspace, "music")
+            os.makedirs(music_dir, exist_ok=True)
+
+            # Check if AI query generation is enabled
+            ai_query_model = await get_setting("ai_query_model", None)
+            ai_query_api_url = await get_setting("ai_query_api_url", OLLAMA_API_URL)
+
             assets = await scraper.gather_scene_assets(
                 scenes,
                 workspace,
@@ -225,9 +288,15 @@ class Orchestrator:
                 lambda lvl, msg: self._log(task_id, lvl, msg),
                 fallback_topic=fallback_topic,
                 scraper_settings=scraper_settings,
+                ai_query_model=ai_query_model,
+                ai_query_api_url=ai_query_api_url,
             )
-            fallback_video = next((a.get("video") for a in assets if a.get("video")), None)
-            fallback_image = next((a.get("image") for a in assets if a.get("image")), None)
+            fallback_video = next(
+                (a.get("video") for a in assets if a.get("video")), None
+            )
+            fallback_image = next(
+                (a.get("image") for a in assets if a.get("image")), None
+            )
             if fallback_video or fallback_image:
                 for entry in assets:
                     if use_stock_video and not entry.get("video") and fallback_video:
@@ -241,9 +310,13 @@ class Orchestrator:
                 )
 
             if vision_settings.get("enabled"):
-                await self._log(task_id, "info", "Running vision analysis on downloaded images")
+                await self._log(
+                    task_id, "info", "Running vision analysis on downloaded images"
+                )
                 for idx, scene in enumerate(scenes, start=1):
-                    image_path = assets[idx - 1].get("image") if idx - 1 < len(assets) else None
+                    image_path = (
+                        assets[idx - 1].get("image") if idx - 1 < len(assets) else None
+                    )
                     if not image_path:
                         continue
                     try:
@@ -262,9 +335,15 @@ class Orchestrator:
                         if caption and not scene.get("overlay_text"):
                             scene["overlay_text"] = caption
                         if tags:
-                            scene["visual_query"] = f"{scene.get('visual_query', '')} {' '.join(tags[:3])}".strip()
+                            scene["visual_query"] = (
+                                f"{scene.get('visual_query', '')} {' '.join(tags[:3])}".strip()
+                            )
                     except Exception as exc:
-                        await self._log(task_id, "error", f"Vision analysis failed for scene {idx}: {exc}")
+                        await self._log(
+                            task_id,
+                            "error",
+                            f"Vision analysis failed for scene {idx}: {exc}",
+                        )
 
             await self._set_progress(task_id, 35)
             texts = [scene.get("voiceover", "") for scene in scenes]
@@ -306,23 +385,53 @@ class Orchestrator:
 
             await self._set_progress(task_id, 70)
             music_path = None
+            music_dir = os.path.join(workspace, "music")
+
+            # Ensure music directory exists before download (double safety)
+            os.makedirs(music_dir, exist_ok=True)
+
             if options.get("add_music", True):
-                base_query = f"{timeline.get('music_mood', 'cinematic')} background music"
+                base_query = (
+                    f"{timeline.get('music_mood', 'cinematic')} background music"
+                )
                 queries = [
                     base_query,
                     f"{fallback_topic} background music" if fallback_topic else None,
                     "ambient background music",
-                    "cinematic background music",
+                    "cinematic music",
                 ]
                 for query in [q for q in queries if q]:
+                    await self._log(
+                        task_id, "info", f"Trying to download music: {query}"
+                    )
                     music_path = await scraper.download_cc_audio(
                         query,
-                        os.path.join(workspace, "music"),
+                        music_dir,
                         lambda lvl, msg: self._log(task_id, lvl, msg),
                         scraper_settings=scraper_settings,
                     )
                     if music_path:
                         break
+
+                # If still no music, check if there's any existing audio file in music dir
+                if not music_path:
+                    import os as os_module
+
+                    if os_module.path.exists(music_dir):
+                        for f in os_module.listdir(music_dir):
+                            if f.endswith((".mp3", ".wav", ".m4a", ".ogg")):
+                                music_path = os_module.path.join(music_dir, f)
+                                await self._log(
+                                    task_id, "info", f"Using existing audio file: {f}"
+                                )
+                                break
+
+                if not music_path:
+                    await self._log(
+                        task_id,
+                        "warn",
+                        "No music found, continuing without background music",
+                    )
 
             await self._set_progress(task_id, 80)
             output_path = os.path.join(OUTPUT_DIR, f"{task_id}.mp4")
@@ -343,7 +452,9 @@ class Orchestrator:
             )
 
             await self._set_progress(task_id, 100)
-            await update_task_status(task_id, "Completed", output_path=output_path, progress=100)
+            await update_task_status(
+                task_id, "Completed", output_path=output_path, progress=100
+            )
             await self._log(task_id, "info", "Task completed successfully")
         except Exception as exc:
             await update_task_status(task_id, "Failed", error=str(exc))
@@ -372,7 +483,11 @@ class Orchestrator:
             per = round(target_duration / len(scenes), 2)
             for scene in scenes:
                 scene["duration"] = per
-            await self._log(task_id, "info", f"Assigned uniform scene durations for {target_duration:.2f}s target")
+            await self._log(
+                task_id,
+                "info",
+                f"Assigned uniform scene durations for {target_duration:.2f}s target",
+            )
             return
 
         scale = target_duration / total
@@ -382,11 +497,17 @@ class Orchestrator:
         adjusted_total = sum(float(scene.get("duration", 0)) for scene in scenes)
         diff = round(target_duration - adjusted_total, 2)
         if abs(diff) > 0 and scenes:
-            scenes[-1]["duration"] = round(float(scenes[-1].get("duration", 0)) + diff, 2)
+            scenes[-1]["duration"] = round(
+                float(scenes[-1].get("duration", 0)) + diff, 2
+            )
 
-        await self._log(task_id, "info", f"Normalized durations to {target_duration:.2f}s target")
+        await self._log(
+            task_id, "info", f"Normalized durations to {target_duration:.2f}s target"
+        )
 
-    def _cleanup_workspace(self, workspace: str, keep: Optional[list[str]] = None) -> None:
+    def _cleanup_workspace(
+        self, workspace: str, keep: Optional[list[str]] = None
+    ) -> None:
         keep = [path for path in (keep or []) if path]
         if not os.path.exists(workspace):
             return

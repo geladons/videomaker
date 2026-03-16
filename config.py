@@ -9,35 +9,51 @@ OUTPUT_DIR = os.path.join(BASE_DIR, "outputs")
 WORKSPACE_DIR = os.path.join(BASE_DIR, "workspaces")
 
 MODELS_DIR = os.environ.get("MODELS_DIR", "/models")
-WHISPER_MODEL_PATH = os.environ.get("WHISPER_MODEL_PATH", os.path.join(MODELS_DIR, "whisper", "small"))
+WHISPER_MODEL_PATH = os.environ.get(
+    "WHISPER_MODEL_PATH", os.path.join(MODELS_DIR, "whisper", "small")
+)
 PIPER_VOICE_PATH = os.environ.get(
     "PIPER_VOICE_PATH", os.path.join(MODELS_DIR, "piper", "en_US-lessac-medium.onnx")
 )
 PIPER_VOICE_CONFIG = os.environ.get(
-    "PIPER_VOICE_CONFIG", os.path.join(MODELS_DIR, "piper", "en_US-lessac-medium.onnx.json")
+    "PIPER_VOICE_CONFIG",
+    os.path.join(MODELS_DIR, "piper", "en_US-lessac-medium.onnx.json"),
 )
 
 DEFAULT_TTS_ENGINE = os.environ.get("TTS_ENGINE", "coqui")
 DEFAULT_COQUI_MODEL = os.environ.get("COQUI_TTS_MODEL", "tts_models/en/vctk/vits")
 DEFAULT_COQUI_SPEAKER = os.environ.get("COQUI_TTS_SPEAKER", "")
 
-OLLAMA_API_URL = os.environ.get("OLLAMA_API_URL", "http://192.168.1.137:11434")
+OLLAMA_API_URL = os.environ.get("OLLAMA_API_URL", "http://localhost:11434")
 DEFAULT_OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen3.5:9b")
 OLLAMA_TIMEOUT = int(os.environ.get("OLLAMA_TIMEOUT", "180"))
-OLLAMA_THINK = os.environ.get("OLLAMA_THINK", "false").lower() in {"1", "true", "yes", "on"}
+OLLAMA_THINK = os.environ.get("OLLAMA_THINK", "false").lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
 
 DEFAULT_OLLAMA_PLANNER_MODEL = os.environ.get("OLLAMA_PLANNER_MODEL", "llama3.2:3b")
 DEFAULT_OLLAMA_PLANNER_TIMEOUT = int(os.environ.get("OLLAMA_PLANNER_TIMEOUT", "120"))
-DEFAULT_OLLAMA_PLANNER_THINK = os.environ.get("OLLAMA_PLANNER_THINK", "false").lower() in {"1", "true", "yes", "on"}
+DEFAULT_OLLAMA_PLANNER_THINK = os.environ.get(
+    "OLLAMA_PLANNER_THINK", "false"
+).lower() in {"1", "true", "yes", "on"}
 
 DEFAULT_OLLAMA_HELPER_MODEL = os.environ.get("OLLAMA_HELPER_MODEL", "qwen3.5:2b")
 DEFAULT_OLLAMA_HELPER_TIMEOUT = int(os.environ.get("OLLAMA_HELPER_TIMEOUT", "120"))
-DEFAULT_OLLAMA_HELPER_THINK = os.environ.get("OLLAMA_HELPER_THINK", "false").lower() in {"1", "true", "yes", "on"}
+DEFAULT_OLLAMA_HELPER_THINK = os.environ.get(
+    "OLLAMA_HELPER_THINK", "false"
+).lower() in {"1", "true", "yes", "on"}
 
 DEFAULT_OLLAMA_VISION_MODEL = os.environ.get("OLLAMA_VISION_MODEL", "qwen3-vl:2b")
 DEFAULT_OLLAMA_VISION_TIMEOUT = int(os.environ.get("OLLAMA_VISION_TIMEOUT", "120"))
-DEFAULT_OLLAMA_VISION_THINK = os.environ.get("OLLAMA_VISION_THINK", "false").lower() in {"1", "true", "yes", "on"}
-DEFAULT_OLLAMA_VISION_ENABLED = os.environ.get("OLLAMA_VISION_ENABLED", "false").lower() in {"1", "true", "yes", "on"}
+DEFAULT_OLLAMA_VISION_THINK = os.environ.get(
+    "OLLAMA_VISION_THINK", "false"
+).lower() in {"1", "true", "yes", "on"}
+DEFAULT_OLLAMA_VISION_ENABLED = os.environ.get(
+    "OLLAMA_VISION_ENABLED", "false"
+).lower() in {"1", "true", "yes", "on"}
 
 DEFAULT_OLLAMA_PARAMS = {
     "num_ctx": 4096,
@@ -134,6 +150,7 @@ LANGUAGE_TO_PIPER = {
     "Italian": "it_IT-riccardo-medium",
     "Portuguese": "pt_BR-faber-medium",
 }
+
 
 @dataclass
 class AppPaths:
