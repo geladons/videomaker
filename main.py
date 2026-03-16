@@ -13,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from config import (
+    DEFAULT_DIRS,
     DEFAULT_OLLAMA_MODEL,
     DEFAULT_OLLAMA_PARAMS,
     DEFAULT_OLLAMA_PLANNER_MODEL,
@@ -390,7 +391,7 @@ async def api_download(task_id: str) -> FileResponse:
 
 @app.get("/api/logs/{task_id}")
 async def api_download_logs(task_id: str) -> FileResponse:
-    log_path = os.path.join(OUTPUT_DIR, "logs", f"{task_id}.log")
+    log_path = os.path.join(OUTPUT_DIR, DEFAULT_DIRS["logs"], f"{task_id}.log")
     if not os.path.exists(log_path):
         raise HTTPException(status_code=404, detail="Log file not found")
     return FileResponse(log_path, filename=f"{task_id}.log")

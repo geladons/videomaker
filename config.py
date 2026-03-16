@@ -8,6 +8,24 @@ DATA_DIR = os.path.join(BASE_DIR, "data")
 OUTPUT_DIR = os.path.join(BASE_DIR, "outputs")
 WORKSPACE_DIR = os.path.join(BASE_DIR, "workspaces")
 
+DB_PATH = os.path.join(DATA_DIR, "videogen.db")
+
+DEFAULT_DIRS = {
+    "videos": "videos",
+    "images": "images",
+    "music": "music",
+    "voice": "voice",
+    "logs": "logs",
+}
+
+SCRAPER_URLS = {
+    "archive_search": "https://archive.org/advancedsearch.php",
+    "archive_metadata": "https://archive.org/metadata/",
+    "archive_download": "https://archive.org/download/",
+    "duckduckgo": "https://html.duckduckgo.com/html/",
+    "wikimedia": "https://commons.wikimedia.org/w/api.php",
+}
+
 MODELS_DIR = os.environ.get("MODELS_DIR", "/models")
 WHISPER_MODEL_PATH = os.environ.get(
     "WHISPER_MODEL_PATH", os.path.join(MODELS_DIR, "whisper", "small")
@@ -20,10 +38,31 @@ PIPER_VOICE_CONFIG = os.environ.get(
     os.path.join(MODELS_DIR, "piper", "en_US-lessac-medium.onnx.json"),
 )
 
+# TTS Engine Defaults
 DEFAULT_TTS_ENGINE = os.environ.get("TTS_ENGINE", "coqui")
 DEFAULT_COQUI_MODEL = os.environ.get("COQUI_TTS_MODEL", "tts_models/en/vctk/vits")
 DEFAULT_COQUI_SPEAKER = os.environ.get("COQUI_TTS_SPEAKER", "")
 
+# VCTK speaker IDs - p225-p335 are available
+DEFAULT_VCTK_SPEAKERS = [
+    "p225",
+    "p226",
+    "p227",
+    "p228",  # Common English speakers
+]
+
+# Fallback speakers for different languages
+LANGUAGE_SPEAKERS = {
+    "English": "p226",  # Male voice
+    "Spanish": "p225",
+    "German": "p225",
+    "French": "p225",
+    "Italian": "p225",
+    "Portuguese": "p225",
+    "Russian": "p225",  # Use English speaker as fallback
+}
+
+# Ollama API Defaults
 OLLAMA_API_URL = os.environ.get("OLLAMA_API_URL", "http://localhost:11434")
 DEFAULT_OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen3.5:9b")
 OLLAMA_TIMEOUT = int(os.environ.get("OLLAMA_TIMEOUT", "180"))
@@ -54,6 +93,9 @@ DEFAULT_OLLAMA_VISION_THINK = os.environ.get(
 DEFAULT_OLLAMA_VISION_ENABLED = os.environ.get(
     "OLLAMA_VISION_ENABLED", "false"
 ).lower() in {"1", "true", "yes", "on"}
+
+LLM_DEFAULT_TIMEOUT = 180.0
+LLM_MAX_RETRIES = 3
 
 DEFAULT_OLLAMA_PARAMS = {
     "num_ctx": 4096,
@@ -114,7 +156,9 @@ DEFAULT_VIDEO = {
     "font_name": "Inter",
     "font_size": 52,
     "font_color": "&H00FFFFFF",
+    "secondary_color": "&H0000E5FF",
     "outline_color": "&H00000000",
+    "shadow_color": "&H64000000",
     "outline": 2,
     "shadow": 1,
     "subtitle_position": "bottom",

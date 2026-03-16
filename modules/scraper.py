@@ -8,7 +8,13 @@ from typing import Any, Awaitable, Callable, Dict, List, Optional
 import httpx
 from bs4 import BeautifulSoup
 
-from config import OLLAMA_API_URL, DEFAULT_OLLAMA_MODEL, DEFAULT_OLLAMA_PARAMS
+from config import (
+    DEFAULT_DIRS,
+    DEFAULT_OLLAMA_MODEL,
+    DEFAULT_OLLAMA_PARAMS,
+    OLLAMA_API_URL,
+    SCRAPER_URLS,
+)
 from modules.utils import ensure_dir, run_command
 
 LogFn = Callable[[str, str], Awaitable[None]]
@@ -172,7 +178,7 @@ async def _download_from_internet_archive(
     try:
         # Search Internet Archive for music
         safe_query = _limit_query(query, max_words=4)
-        search_url = f"https://archive.org/advancedsearch.php?q={safe_query}+music&fl[]=identifier&output=json&rows=10"
+        search_url = f"{SCRAPER_URLS['archive_search']}?q={safe_query}+music&fl[]=identifier&output=json&rows=10"
 
         async with httpx.AsyncClient(timeout=30) as client:
             response = await client.get(search_url)
@@ -191,7 +197,7 @@ async def _download_from_internet_archive(
                 continue
 
             # Check if this item has audio files
-            detail_url = f"https://archive.org/metadata/{identifier}"
+            detail_url = f"{SCRAPER_URLS['archive_metadata']}{identifier}"
             try:
                 async with httpx.AsyncClient(timeout=30) as client:
                     response = await client.get(detail_url)
@@ -209,7 +215,7 @@ async def _download_from_internet_archive(
                             file.get("size", "0") and int(file.get("size", 0)) > 100000
                         ):  # >100KB
                             # Download this file
-                            download_url = f"https://archive.org/download/{identifier}/{file['name']}"
+                            download_url = f"{SCRAPER_URLS['archive_download']}{identifier}/{file['name']}"
                             out_path = os.path.join(out_dir, f"music_{identifier}.mp3")
 
                             await log(
@@ -296,7 +302,7 @@ async def _download_audio_fallback(
 
 
 async def search_duckduckgo_images(query: str, limit: int = 3) -> List[str]:
-    url = "https://html.duckduckgo.com/html/"
+    url = SCRAPER_URLS["duckduckgo"]
     params = {"q": query}
     headers = {"User-Agent": "Mozilla/5.0"}
     async with httpx.AsyncClient(timeout=30, headers=headers) as client:
@@ -320,7 +326,7 @@ async def search_duckduckgo_images(query: str, limit: int = 3) -> List[str]:
 
 
 async def search_wikimedia_images(query: str, limit: int = 3) -> List[str]:
-    api_url = "https://commons.wikimedia.org/w/api.php"
+    api_url = SCRAPER_URLS["wikimedia"]
     params = {
         "action": "query",
         "format": "json",
@@ -487,9 +493,9 @@ async def gather_scene_assets(
     Processes scenes sequentially to avoid YouTube rate limits.
     """
     assets: List[Dict[str, Optional[str]]] = []
-    video_dir = os.path.join(workspace, "videos")
-    image_dir = os.path.join(workspace, "images")
-    music_dir = os.path.join(workspace, "music")
+    video_dir = os.path.join(workspace, DEFAULT_DIRS["videos"])
+    image_dir = os.path.join(workspace, DEFAULT_DIRS["images"])
+    music_dir = os.path.join(workspace, DEFAULT_DIRS["music"])
 
     # CRITICAL: Create ALL directories BEFORE any downloads
     ensure_dir(video_dir)

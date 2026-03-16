@@ -44,8 +44,9 @@ def _build_ass_header(
     font = settings["font_name"]
     size = settings["font_size"]
     primary = settings["font_color"]
-    secondary = "&H0000E5FF"  # bright yellow
+    secondary = settings.get("secondary_color", "&H0000E5FF")
     outline = settings["outline_color"]
+    back = settings.get("shadow_color", "&H64000000")
     outline_size = settings["outline"]
     shadow = settings["shadow"]
     position = settings.get("subtitle_position", "bottom")
@@ -68,7 +69,7 @@ def _build_ass_header(
         "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, "
         "Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, "
         "Alignment, MarginL, MarginR, MarginV, Encoding\n"
-        f"Style: {style_name},{font},{size},{primary},{secondary},{outline},&H64000000,0,0,0,0,100,100,0,0,1,{outline_size},{shadow},{alignment},{margin_x},{margin_x},{margin_y},1\n"
+        f"Style: {style_name},{font},{size},{primary},{secondary},{outline},{back},0,0,0,0,100,100,0,0,1,{outline_size},{shadow},{alignment},{margin_x},{margin_x},{margin_y},1\n"
         "\n"
         "[Events]\n"
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"

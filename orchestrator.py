@@ -9,11 +9,14 @@ from datetime import datetime
 from typing import Any, Awaitable, Callable, Dict, Optional
 
 from config import (
-    DEFAULT_OLLAMA_MODEL,
+    DEFAULT_COQUI_MODEL,
+    DEFAULT_COQUI_SPEAKER,
+    DEFAULT_DIRS,
     DEFAULT_OLLAMA_HELPER_MODEL,
     DEFAULT_OLLAMA_HELPER_PARAMS,
     DEFAULT_OLLAMA_HELPER_THINK,
     DEFAULT_OLLAMA_HELPER_TIMEOUT,
+    DEFAULT_OLLAMA_MODEL,
     DEFAULT_OLLAMA_PARAMS,
     DEFAULT_OLLAMA_PLANNER_MODEL,
     DEFAULT_OLLAMA_PLANNER_PARAMS,
@@ -26,16 +29,15 @@ from config import (
     DEFAULT_OLLAMA_VISION_THINK,
     DEFAULT_OLLAMA_VISION_TIMEOUT,
     DEFAULT_SCRAPER,
-    DEFAULT_VIDEO,
     DEFAULT_TTS_ENGINE,
-    DEFAULT_COQUI_MODEL,
-    DEFAULT_COQUI_SPEAKER,
+    DEFAULT_VIDEO,
     DEFAULT_VOICEOVER_WPS,
+    LLM_DEFAULT_TIMEOUT,
     OLLAMA_API_URL,
     OUTPUT_DIR,
     WORKSPACE_DIR,
 )
-from database import add_log, create_task, update_task_status
+from database import add_log, create_task, get_setting, update_task_status
 from modules import compositor, llm, scraper, subtitles, tts_engine, vision
 
 LogFn = Callable[[str, str], Awaitable[None]]
@@ -47,7 +49,86 @@ class Orchestrator:
         self.active_task_id: Optional[str] = None
         self.log_callback = log_callback
         self.worker_task: Optional[asyncio.Task] = None
-        self.log_dir = os.path.join(OUTPUT_DIR, "logs")
+        self.log_dir = os.path.join(OUTPUT_DIR, DEFAULT_DIRS["logs"])
+
+    async def _get_effective_settings(self) -> Dict[str, Any]:
+        """Fetch all configuration with database overrides and config.py fallbacks."""
+        return {
+            "ollama_api_url": await get_setting("ollama_api_url", OLLAMA_API_URL),
+            "ollama_model": await get_setting("ollama_model", DEFAULT_OLLAMA_MODEL),
+            "ollama_params": await get_setting("ollama_params", DEFAULT_OLLAMA_PARAMS),
+            "ollama_timeout": await get_setting("ollama_timeout", LLM_DEFAULT_TIMEOUT),
+            "ollama_think": await get_setting("ollama_think", False),
+            "ollama_request_delay": await get_setting(
+                "ollama_request_delay", DEFAULT_OLLAMA_REQUEST_DELAY
+            ),
+            "planner": {
+                "model": await get_setting(
+                    "ollama_planner_model", DEFAULT_OLLAMA_PLANNER_MODEL
+                ),
+                "params": await get_setting(
+                    "ollama_planner_params", DEFAULT_OLLAMA_PLANNER_PARAMS
+                ),
+                "api_url": await get_setting("ollama_planner_api_url", OLLAMA_API_URL),
+                "timeout": await get_setting(
+                    "ollama_planner_timeout", DEFAULT_OLLAMA_PLANNER_TIMEOUT
+                ),
+                "think": await get_setting(
+                    "ollama_planner_think", DEFAULT_OLLAMA_PLANNER_THINK
+                ),
+            },
+            "helper": {
+                "api_url": await get_setting("ollama_helper_api_url", OLLAMA_API_URL),
+                "model": await get_setting(
+                    "ollama_helper_model", DEFAULT_OLLAMA_HELPER_MODEL
+                ),
+                "params": await get_setting(
+                    "ollama_helper_params", DEFAULT_OLLAMA_HELPER_PARAMS
+                ),
+                "timeout": await get_setting(
+                    "ollama_helper_timeout", DEFAULT_OLLAMA_HELPER_TIMEOUT
+                ),
+                "think": await get_setting(
+                    "ollama_helper_think", DEFAULT_OLLAMA_HELPER_THINK
+                ),
+            },
+            "vision": {
+                "api_url": await get_setting("ollama_vision_api_url", OLLAMA_API_URL),
+                "model": await get_setting(
+                    "ollama_vision_model", DEFAULT_OLLAMA_VISION_MODEL
+                ),
+                "params": await get_setting(
+                    "ollama_vision_params", DEFAULT_OLLAMA_VISION_PARAMS
+                ),
+                "timeout": await get_setting(
+                    "ollama_vision_timeout", DEFAULT_OLLAMA_VISION_TIMEOUT
+                ),
+                "think": await get_setting(
+                    "ollama_vision_think", DEFAULT_OLLAMA_VISION_THINK
+                ),
+                "enabled": await get_setting(
+                    "ollama_vision_enabled", DEFAULT_OLLAMA_VISION_ENABLED
+                ),
+            },
+            "scraper": await get_setting("scraper_settings", DEFAULT_SCRAPER),
+            "video": await get_setting("video_settings", DEFAULT_VIDEO),
+            "tts": {
+                "engine": await get_setting("tts_engine", DEFAULT_TTS_ENGINE),
+                "voice_path": await get_setting("tts_voice_path", None),
+                "voice_config": await get_setting("tts_voice_config", None),
+                "coqui_model": await get_setting("coqui_model", DEFAULT_COQUI_MODEL),
+                "coqui_speaker": await get_setting(
+                    "coqui_speaker", DEFAULT_COQUI_SPEAKER
+                ),
+                "voiceover_wps": float(
+                    await get_setting("voiceover_words_per_sec", DEFAULT_VOICEOVER_WPS)
+                ),
+            },
+            "ai_query": {
+                "model": await get_setting("ai_query_model", None),
+                "api_url": await get_setting("ai_query_api_url", OLLAMA_API_URL),
+            },
+        }
 
     async def start(self) -> None:
         if self.worker_task is None:
@@ -93,7 +174,7 @@ class Orchestrator:
             self.queue.task_done()
 
     async def _run_task(self, task_id: str) -> None:
-        from database import get_task, get_setting
+        from database import get_task
 
         task = await get_task(task_id)
         if not task:
@@ -109,92 +190,24 @@ class Orchestrator:
 
         output_path = None
         try:
-            writer_model = await get_setting("ollama_model", DEFAULT_OLLAMA_MODEL)
-            writer_params = await get_setting("ollama_params", DEFAULT_OLLAMA_PARAMS)
-            writer_api_url = await get_setting("ollama_api_url", OLLAMA_API_URL)
-            writer_timeout = await get_setting("ollama_timeout", 180)
-            writer_think = await get_setting("ollama_think", False)
-            ollama_delay = await get_setting(
-                "ollama_request_delay", DEFAULT_OLLAMA_REQUEST_DELAY
-            )
-
-            planner_model = await get_setting(
-                "ollama_planner_model", DEFAULT_OLLAMA_PLANNER_MODEL
-            )
-            planner_params = await get_setting(
-                "ollama_planner_params", DEFAULT_OLLAMA_PLANNER_PARAMS
-            )
-            planner_api_url = await get_setting(
-                "ollama_planner_api_url", OLLAMA_API_URL
-            )
-            planner_timeout = await get_setting(
-                "ollama_planner_timeout", DEFAULT_OLLAMA_PLANNER_TIMEOUT
-            )
-            planner_think = await get_setting(
-                "ollama_planner_think", DEFAULT_OLLAMA_PLANNER_THINK
-            )
-            scraper_settings = await get_setting("scraper_settings", DEFAULT_SCRAPER)
-            helper_settings = {
-                "api_url": await get_setting("ollama_helper_api_url", OLLAMA_API_URL),
-                "model": await get_setting(
-                    "ollama_helper_model", DEFAULT_OLLAMA_HELPER_MODEL
-                ),
-                "options": await get_setting(
-                    "ollama_helper_params", DEFAULT_OLLAMA_HELPER_PARAMS
-                ),
-                "timeout": await get_setting(
-                    "ollama_helper_timeout", DEFAULT_OLLAMA_HELPER_TIMEOUT
-                ),
-                "think": await get_setting(
-                    "ollama_helper_think", DEFAULT_OLLAMA_HELPER_THINK
-                ),
-            }
-            vision_settings = {
-                "api_url": await get_setting("ollama_vision_api_url", OLLAMA_API_URL),
-                "model": await get_setting(
-                    "ollama_vision_model", DEFAULT_OLLAMA_VISION_MODEL
-                ),
-                "options": await get_setting(
-                    "ollama_vision_params", DEFAULT_OLLAMA_VISION_PARAMS
-                ),
-                "timeout": await get_setting(
-                    "ollama_vision_timeout", DEFAULT_OLLAMA_VISION_TIMEOUT
-                ),
-                "think": await get_setting(
-                    "ollama_vision_think", DEFAULT_OLLAMA_VISION_THINK
-                ),
-                "enabled": await get_setting(
-                    "ollama_vision_enabled", DEFAULT_OLLAMA_VISION_ENABLED
-                ),
-            }
-            video_settings = await get_setting("video_settings", DEFAULT_VIDEO)
-            voice_path = await get_setting("tts_voice_path", None)
-            voice_config = await get_setting("tts_voice_config", None)
-            tts_engine_name = await get_setting("tts_engine", DEFAULT_TTS_ENGINE)
-            coqui_model = await get_setting("coqui_model", DEFAULT_COQUI_MODEL)
-            coqui_speaker = await get_setting("coqui_speaker", DEFAULT_COQUI_SPEAKER)
-            voiceover_wps = await get_setting(
-                "voiceover_words_per_sec", DEFAULT_VOICEOVER_WPS
-            )
-            try:
-                voiceover_wps = float(voiceover_wps)
-            except (TypeError, ValueError):
-                voiceover_wps = float(DEFAULT_VOICEOVER_WPS)
+            cfg = await self._get_effective_settings()
 
             await self._set_progress(task_id, 5)
-            await self._log(task_id, "info", f"Ollama request delay: {ollama_delay}s")
-            await self._log(task_id, "info", f"Scraper settings: {scraper_settings}")
+            await self._log(
+                task_id, "info", f"Ollama request delay: {cfg['ollama_request_delay']}s"
+            )
+            await self._log(task_id, "info", f"Scraper settings: {cfg['scraper']}")
             await self._log(task_id, "info", "Requesting plan from Planner LLM")
             timeline = await llm.plan_timeline(
                 prompt,
-                model=planner_model,
-                options=planner_params,
-                api_url=planner_api_url,
-                timeout=float(planner_timeout),
-                think=bool(planner_think),
-                helper_settings=helper_settings,
+                model=cfg["planner"]["model"],
+                options=cfg["planner"]["params"],
+                api_url=cfg["planner"]["api_url"],
+                timeout=float(cfg["planner"]["timeout"]),
+                think=bool(cfg["planner"]["think"]),
+                helper_settings=cfg["helper"],
                 target_duration=float(options.get("duration", 0) or 0),
-                request_delay=float(ollama_delay),
+                request_delay=float(cfg["ollama_request_delay"]),
                 log=lambda lvl, msg: self._log(task_id, lvl, msg),
             )
 
@@ -226,22 +239,22 @@ class Orchestrator:
             )
             for idx, scene in enumerate(scenes, start=1):
                 duration = float(scene.get("duration", 0) or 0)
-                target_words = max(12, int(duration * voiceover_wps))
+                target_words = max(12, int(duration * cfg["tts"]["voiceover_wps"]))
                 try:
                     voice_text = await llm.generate_voiceover(
                         scene,
                         language=options.get("language", "English"),
                         target_words=target_words,
-                        model=writer_model,
-                        options=writer_params,
-                        api_url=writer_api_url,
-                        timeout=float(writer_timeout),
-                        think=bool(writer_think),
+                        model=cfg["ollama_model"],
+                        options=cfg["ollama_params"],
+                        api_url=cfg["ollama_api_url"],
+                        timeout=float(cfg["ollama_timeout"]),
+                        think=bool(cfg["ollama_think"]),
                         add_greeting=bool(options.get("add_greeting", False)),
                         add_closing=bool(options.get("add_closing", False)),
                         is_first=idx == 1,
                         is_last=idx == len(scenes),
-                        request_delay=float(ollama_delay),
+                        request_delay=float(cfg["ollama_request_delay"]),
                         log=lambda lvl, msg: self._log(task_id, lvl, msg),
                     )
                     scene["voiceover"] = voice_text
@@ -274,12 +287,8 @@ class Orchestrator:
 
             # Ensure workspace and subdirs exist
             os.makedirs(workspace, exist_ok=True)
-            music_dir = os.path.join(workspace, "music")
+            music_dir = os.path.join(workspace, DEFAULT_DIRS["music"])
             os.makedirs(music_dir, exist_ok=True)
-
-            # Check if AI query generation is enabled
-            ai_query_model = await get_setting("ai_query_model", None)
-            ai_query_api_url = await get_setting("ai_query_api_url", OLLAMA_API_URL)
 
             try:
                 assets = await scraper.gather_scene_assets(
@@ -289,9 +298,9 @@ class Orchestrator:
                     use_images,
                     lambda lvl, msg: self._log(task_id, lvl, msg),
                     fallback_topic=fallback_topic,
-                    scraper_settings=scraper_settings,
-                    ai_query_model=ai_query_model,
-                    ai_query_api_url=ai_query_api_url,
+                    scraper_settings=cfg["scraper"],
+                    ai_query_model=cfg["ai_query"]["model"],
+                    ai_query_api_url=cfg["ai_query"]["api_url"],
                 )
             except Exception as e:
                 await self._log(task_id, "error", f"Asset gathering failed: {e}")
@@ -316,7 +325,7 @@ class Orchestrator:
                     "Reused first available video/image for scenes missing assets.",
                 )
 
-            if vision_settings.get("enabled"):
+            if cfg["vision"]["enabled"]:
                 await self._log(
                     task_id, "info", "Running vision analysis on downloaded images"
                 )
@@ -329,11 +338,11 @@ class Orchestrator:
                     try:
                         analysis = await vision.analyze_image(
                             image_path,
-                            api_url=vision_settings["api_url"],
-                            model=vision_settings["model"],
-                            options=vision_settings["options"],
-                            timeout=float(vision_settings["timeout"]),
-                            think=bool(vision_settings.get("think", False)),
+                            api_url=cfg["vision"]["api_url"],
+                            model=cfg["vision"]["model"],
+                            options=cfg["vision"]["params"],
+                            timeout=float(cfg["vision"]["timeout"]),
+                            think=bool(cfg["vision"].get("think", False)),
                             prompt=scene.get("visual_query"),
                             log=lambda lvl, msg: self._log(task_id, lvl, msg),
                         )
@@ -354,22 +363,22 @@ class Orchestrator:
 
             await self._set_progress(task_id, 35)
             texts = [scene.get("voiceover", "") for scene in scenes]
-            voice_dir = os.path.join(workspace, "voice")
+            voice_dir = os.path.join(workspace, DEFAULT_DIRS["voice"])
             await self._log(
                 task_id,
                 "info",
-                f"TTS engine: {tts_engine_name} (coqui_model={coqui_model}, speaker={coqui_speaker})",
+                f"TTS engine: {cfg['tts']['engine']} (coqui_model={cfg['tts']['coqui_model']}, speaker={cfg['tts']['coqui_speaker']})",
             )
             voiceovers = await tts_engine.generate_voiceovers(
                 texts,
                 voice_dir,
                 lambda lvl, msg: self._log(task_id, lvl, msg),
-                voice_path=voice_path,
-                voice_config=voice_config,
+                voice_path=cfg["tts"]["voice_path"],
+                voice_config=cfg["tts"]["voice_config"],
                 language=options.get("language", "English"),
-                engine=tts_engine_name,
-                coqui_model=coqui_model,
-                coqui_speaker=coqui_speaker,
+                engine=cfg["tts"]["engine"],
+                coqui_model=cfg["tts"]["coqui_model"],
+                coqui_speaker=cfg["tts"]["coqui_speaker"],
             )
 
             await self._set_progress(task_id, 55)
@@ -386,13 +395,13 @@ class Orchestrator:
                     offsets,
                     subtitle_path,
                     lambda lvl, msg: self._log(task_id, lvl, msg),
-                    video_settings=video_settings,
+                    video_settings=cfg["video"],
                     format_choice=options.get("format", "16:9"),
                 )
 
             await self._set_progress(task_id, 70)
             music_path = None
-            music_dir = os.path.join(workspace, "music")
+            music_dir = os.path.join(workspace, DEFAULT_DIRS["music"])
 
             if options.get("add_music", True):
                 # Ensure music directory exists before download
@@ -421,7 +430,7 @@ class Orchestrator:
                             query,
                             music_dir,
                             lambda lvl, msg: self._log(task_id, lvl, msg),
-                            scraper_settings=scraper_settings,
+                            scraper_settings=cfg["scraper"],
                         )
                         if music_path and os.path.exists(music_path):
                             await self._log(task_id, "info", f"Successfully obtained music: {os.path.basename(music_path)}")
@@ -461,8 +470,8 @@ class Orchestrator:
                 workspace,
                 lambda lvl, msg: self._log(task_id, lvl, msg),
                 format_choice=options.get("format", "16:9"),
-                fps=int(video_settings.get("fps", 30)),
-                video_settings=video_settings,
+                fps=int(cfg["video"].get("fps", 30)),
+                video_settings=cfg["video"],
                 background_music=music_path,
                 burn_subtitles=subtitle_path,
             )

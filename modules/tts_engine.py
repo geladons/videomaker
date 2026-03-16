@@ -4,28 +4,17 @@ import asyncio
 import os
 from typing import Awaitable, Callable, List, Optional, Tuple
 
-from config import LANGUAGE_TO_PIPER, MODELS_DIR, PIPER_VOICE_CONFIG, PIPER_VOICE_PATH
+from config import (
+    DEFAULT_COQUI_MODEL,
+    DEFAULT_VCTK_SPEAKERS,
+    LANGUAGE_SPEAKERS,
+    LANGUAGE_TO_PIPER,
+    MODELS_DIR,
+    PIPER_VOICE_CONFIG,
+    PIPER_VOICE_PATH,
+)
 
 LogFn = Callable[[str, str], Awaitable[None]]
-
-# VCTK speaker IDs - p225-p335 are available
-DEFAULT_VCTK_SPEAKERS = [
-    "p225",
-    "p226",
-    "p227",
-    "p228",  # Common English speakers
-]
-
-# Fallback speakers for different languages
-LANGUAGE_SPEAKERS = {
-    "English": "p226",  # Male voice
-    "Spanish": "p225",
-    "German": "p225",
-    "French": "p225",
-    "Italian": "p225",
-    "Portuguese": "p225",
-    "Russian": "p225",  # Use English speaker as fallback
-}
 
 
 def _get_default_speaker(language: Optional[str] = None) -> str:
@@ -227,7 +216,7 @@ async def _generate_coqui(
         )
 
     # Use default model if none specified
-    model_name = model_name or "tts_models/en/vctk/vits"
+    model_name = model_name or DEFAULT_COQUI_MODEL
 
     # Get speaker - use default if not specified
     # VCTK model REQUIRES a speaker ID

@@ -7,7 +7,13 @@ from typing import Any, Awaitable, Callable, Dict, List, Optional, Union
 
 import httpx
 
-from config import DEFAULT_OLLAMA_MODEL, DEFAULT_OLLAMA_PARAMS, OLLAMA_API_URL
+from config import (
+    DEFAULT_OLLAMA_MODEL,
+    DEFAULT_OLLAMA_PARAMS,
+    LLM_DEFAULT_TIMEOUT,
+    LLM_MAX_RETRIES,
+    OLLAMA_API_URL,
+)
 from modules.ai_helper import (
     Timeline,
     call_llm_with_retry,
@@ -129,7 +135,7 @@ async def plan_timeline(
     model: str | None = None,
     options: Dict[str, Any] | None = None,
     api_url: str = OLLAMA_API_URL,
-    timeout: float = 180.0,
+    timeout: float = LLM_DEFAULT_TIMEOUT,
     think: bool = False,
     helper_settings: Optional[Dict[str, Any]] = None,
     target_duration: Optional[float] = None,
@@ -155,7 +161,7 @@ async def plan_timeline(
             api_url,
             payload,
             timeout,
-            max_retries=3,
+            max_retries=LLM_MAX_RETRIES,
             log=log,
             validation_model=Timeline
         )

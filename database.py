@@ -8,9 +8,7 @@ from typing import Any, Dict, List, Optional
 
 import aiosqlite
 
-from config import DATA_DIR
-
-DB_PATH = os.path.join(DATA_DIR, "videogen.db")
+from config import DATA_DIR, DB_PATH
 
 _db: Optional[aiosqlite.Connection] = None
 _write_queue: Optional[asyncio.Queue] = None
