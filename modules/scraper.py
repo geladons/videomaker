@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import os
 import re
+import time
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 import httpx
@@ -20,16 +21,33 @@ from modules.utils import ensure_dir, run_command
 LogFn = Callable[[str, str], Awaitable[None]]
 
 
-async def _latest_file(directory: str, exts: List[str]) -> Optional[str]:
+async def _latest_file(
+    directory: str, exts: List[str], min_mtime: Optional[float] = None
+) -> Optional[str]:
     candidates = []
     for name in os.listdir(directory):
         if any(name.lower().endswith(ext) for ext in exts):
             path = os.path.join(directory, name)
-            candidates.append((os.path.getmtime(path), path))
+            mtime = os.path.getmtime(path)
+            if min_mtime is None or mtime >= min_mtime:
+                candidates.append((mtime, path))
     if not candidates:
         return None
     candidates.sort(reverse=True)
     return candidates[0][1]
+
+
+def _cleanup_temp_files(directory: str, exts: List[str], min_mtime: float) -> None:
+    """Clean up temporary files created after min_mtime."""
+    for name in os.listdir(directory):
+        if any(name.lower().endswith(ext) for ext in exts):
+            path = os.path.join(directory, name)
+            try:
+                mtime = os.path.getmtime(path)
+                if mtime >= min_mtime:
+                    os.remove(path)
+            except (OSError, FileNotFoundError):
+                pass
 
 
 def _limit_query(query: str, max_words: int = 6) -> str:
@@ -75,14 +93,20 @@ async def download_cc_video(
         base_cmd += ["--max-sleep-interval", str(sleep_max)]
     if delay_sec > 0:
         await asyncio.sleep(delay_sec)
+    
+    start_time = time.time()
     code = await run_command(base_cmd + ["--match-filter", match_filter], log=log)
     
     # Check if a file was actually downloaded despite potential exit code 1 (warnings)
-    latest = await _latest_file(out_dir, [".mp4", ".mkv", ".webm"])
+    latest = await _latest_file(out_dir, [".mp4", ".mkv", ".webm"], min_mtime=start_time)
     
-    if code != 0 and not latest:
-        await log("error", f"No Creative Commons video found for query: {query}")
-        return None
+    if code != 0:
+        if latest:
+            await log("warn", f"yt-dlp exited with code {code} but video file was produced.")
+        else:
+            await log("error", f"No Creative Commons video found for query: {query}")
+            _cleanup_temp_files(out_dir, [".part", ".ytdl"], min_mtime=start_time)
+            return None
     
     if not latest:
         await log(
@@ -141,34 +165,25 @@ async def download_cc_audio(
         await asyncio.sleep(delay_sec)
 
     await log("info", f"Downloading audio: yt-dlp {safe_query} creative commons")
+    start_time = time.time()
     code = await run_command(base_cmd + ["--match-filter", match_filter], log=log)
     
     # Check if a file was actually downloaded despite potential exit code 1 (warnings)
-    latest = await _latest_file(out_dir, [".mp3", ".m4a", ".wav", ".ogg"])
+    latest = await _latest_file(out_dir, [".mp3", ".m4a", ".wav", ".ogg"], min_mtime=start_time)
     
-    if code != 0 and not latest:
-        await log("error", f"No Creative Commons audio found for query: {query}")
-        return None
+    if code != 0:
+        if latest:
+            await log("warn", f"yt-dlp exited with code {code} but audio file was produced.")
+        else:
+            await log("error", f"No Creative Commons audio found for query: {query}")
+            _cleanup_temp_files(out_dir, [".part", ".ytdl"], min_mtime=start_time)
+            return None
     
     if not latest:
         await log(
             "error", f"yt-dlp completed but no audio file found for query: {query}"
         )
     return latest
-
-
-async def _download_from_internet_archive(
-    query: str, out_dir: str, log: LogFn
-) -> Optional[str]:
-    """Legacy function - not used anymore."""
-    return None
-
-
-async def _download_audio_fallback(
-    query: str, out_dir: str, log: LogFn, settings: Dict[str, Any]
-) -> Optional[str]:
-    """Legacy function - not used anymore."""
-    return None
 
 
 async def _download_from_internet_archive(
@@ -285,13 +300,21 @@ async def _download_audio_fallback(
         ]
 
         await log("info", f"Trying audio download with query: {simple_query}")
+        start_time = time.time()
         code = await run_command(cmd, log=log)
 
-        if code == 0:
-            latest = await _latest_file(out_dir, [".mp3", ".m4a", ".wav"])
+        # Check for success even with warnings (non-zero exit)
+        latest = await _latest_file(out_dir, [".mp3", ".m4a", ".wav"], min_mtime=start_time)
+
+        if code == 0 or latest:
             if latest:
+                if code != 0:
+                    await log("warn", f"Fallback audio download exited with code {code} but file was produced.")
                 await log("info", f"Audio downloaded: {latest}")
                 return latest
+        
+        if code != 0:
+            _cleanup_temp_files(out_dir, [".part", ".ytdl"], min_mtime=start_time)
 
         await log("warn", f"Audio download failed for query: {simple_query}")
         return None
