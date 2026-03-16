@@ -28,12 +28,11 @@ class Timeline(BaseModel):
     scenes: List[Scene]
 
 
-def _extract_json(text: str) -> Dict[str, Any]:
+def _extract_json(text: str) -> Any:
     if not text:
         raise ValueError("Empty response from model")
     cleaned = text.strip()
     
-    # Handle thinking tags
     if "<think>" in cleaned:
         cleaned = re.sub(r"<think>.*?</think>", "", cleaned, flags=re.DOTALL).strip()
     
@@ -41,43 +40,43 @@ def _extract_json(text: str) -> Dict[str, Any]:
         parts = cleaned.split("```")
         for chunk in parts:
             chunk = chunk.strip()
-            if not chunk:
+            if not chunk or not (chunk.startswith("{") or chunk.startswith("[") or chunk.lower().startswith("json")):
                 continue
             if chunk.lower().startswith("json"):
                 chunk = chunk[4:].strip()
-            if chunk.startswith("{") and chunk.endswith("}"):
+            if chunk.startswith("{") or chunk.startswith("["):
                 cleaned = chunk
                 break
     
-    if cleaned.startswith("{") and cleaned.endswith("}"):
+    if (cleaned.startswith("{") and cleaned.endswith("}")) or (cleaned.startswith("[") and cleaned.endswith("]")):
         return json.loads(cleaned)
     
-    start = cleaned.find("{")
-    end = cleaned.rfind("}")
+    start_obj, start_arr = cleaned.find("{"), cleaned.find("[")
+    if start_obj != -1 and (start_arr == -1 or start_obj < start_arr):
+        start, end = start_obj, cleaned.rfind("}")
+    elif start_arr != -1:
+        start, end = start_arr, cleaned.rfind("]")
+    else:
+        raise ValueError("No JSON object or array found")
+
     if start != -1 and end != -1 and end > start:
         return json.loads(cleaned[start : end + 1])
-    
-    raise ValueError("No JSON object found in model response")
+    raise ValueError("No JSON object or array found")
 
 
 def _sanitize_json_text(text: str) -> str:
-    output = []
-    in_string = False
-    escape = False
+    """Replaces unescaped newlines in strings with spaces."""
+    output, in_string, escape = [], False, False
     for ch in text:
         if in_string:
             if escape:
                 escape = False
-                output.append(ch)
-                continue
-            if ch == "\\":
+            elif ch == "\\":
                 escape = True
-                output.append(ch)
-                continue
-            if ch in ("\r", "\n"):
+            elif ch in ("\r", "\n"):
                 output.append(" ")
                 continue
-            if ch == '"':
+            elif ch == '"':
                 in_string = False
             output.append(ch)
         else:
@@ -87,50 +86,70 @@ def _sanitize_json_text(text: str) -> str:
     return "".join(output)
 
 
-def _repair_json_deterministic(text: str) -> Optional[Dict[str, Any]]:
-    start = text.find("{")
-    if start == -1:
+def _safe_replace(pattern: str, replacement: Any, target: str) -> str:
+    """Matches double-quoted strings OR the pattern, protecting string contents."""
+    full_pattern = r'("(?:\\.|[^"\\])*")|' + pattern
+    def subst(match):
+        if match.group(1): return match.group(1)
+        return match.expand(replacement) if isinstance(replacement, str) else replacement(match)
+    return re.sub(full_pattern, subst, target, flags=re.DOTALL)
+
+
+def _repair_json_deterministic(text: str) -> Optional[Any]:
+    start_obj, start_arr = text.find("{"), text.find("[")
+    if start_obj != -1 and (start_arr == -1 or start_obj < start_arr):
+        start, end = start_obj, text.rfind("}")
+    elif start_arr != -1:
+        start, end = start_arr, text.rfind("]")
+    else:
         return None
     
-    # For truncated JSON, 'end' might not exist. We take the rest of the string.
-    end = text.rfind("}")
-    if end == -1 or end <= start:
-        cleaned = text[start:]
-    else:
-        cleaned = text[start : end + 1]
-    
-    cleaned = cleaned.replace("“", '"').replace("”", '"')
+    cleaned = text[start : (end + 1 if end != -1 and end > start else None)]
+    cleaned = cleaned.replace("“", '"').replace("”", '"').replace("‘", "'").replace("’", "'")
+    cleaned = _safe_replace(r"'", '"', cleaned)
     cleaned = _sanitize_json_text(cleaned)
     
-    # Remove trailing commas before closing brackets
-    cleaned = re.sub(r",\s*([}\]])", r"\1", cleaned)
+    # Structural repairs
+    cleaned = _safe_replace(r'([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)(\s*:)', r'\2"\3"\4', cleaned)
+    cleaned = _safe_replace(r'([}\]])\s*([{\[])', r'\2, \3', cleaned)
+    
+    # Value-to-key repairs (e.g., missing comma between value and next key)
+    val_pat = r'("(?:\\.|[^"\\])*"|true|false|null|(?<!\w)-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)'
+    key_pat = r'("(?:\\.|[^"\\])*"\s*:)'
+    cleaned = re.sub(val_pat + r'\s+' + key_pat, r'\1, \2', cleaned, flags=re.DOTALL)
+    cleaned = _safe_replace(r",\s*([}\]])", r"\2", cleaned)
     
     try:
         return json.loads(cleaned)
     except json.JSONDecodeError:
         pass
 
-    # Attempt to balance truncated JSON by closing brackets/braces.
-    balanced = cleaned
-    # Remove a trailing comma if it exists after the last balancing
-    balanced = balanced.strip().rstrip(",")
+    # Balance truncated JSON
+    balanced = cleaned.strip().rstrip(",")
+    def count_outside(char: str, target: str) -> int:
+        count, in_str, esc = 0, False, False
+        for ch in target:
+            if in_str:
+                if esc: esc = False
+                elif ch == "\\": esc = True
+                elif ch == '"': in_str = False
+            elif ch == '"': in_str = True
+            elif ch == char: count += 1
+        return count
+
+    b_open, b_close = count_outside("[", balanced), count_outside("]", balanced)
+    if b_open > b_close: balanced += "]" * (b_open - b_close)
+    br_open, br_close = count_outside("{", balanced), count_outside("}", balanced)
+    if br_open > br_close: balanced += "}" * (br_open - br_close)
     
-    bracket_open = balanced.count("[")
-    bracket_close = balanced.count("]")
-    if bracket_open > bracket_close:
-        balanced += "]" * (bracket_open - bracket_close)
-        
-    brace_open = balanced.count("{")
-    brace_close = balanced.count("}")
-    if brace_open > brace_close:
-        balanced += "}" * (brace_open - brace_close)
-        
-    # Final cleanup of trailing commas that might have been exposed
-    balanced = re.sub(r",\s*([}\]])", r"\1", balanced)
+    balanced = _safe_replace(r",\s*([}\]])", r"\2", balanced)
     
     try:
         return json.loads(balanced)
     except Exception:
+        if "," in balanced and not balanced.startswith("["):
+            try: return json.loads("[" + balanced + "]")
+            except Exception: pass
         return None
 
 
