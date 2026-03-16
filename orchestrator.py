@@ -237,7 +237,12 @@ class Orchestrator:
             await self._log(
                 task_id, "info", "Generating scene voiceovers with Writer LLM"
             )
+            num_scenes = len(scenes)
             for idx, scene in enumerate(scenes, start=1):
+                # Voiceover script generation: 15% -> 30%
+                p = 15 + int((idx / num_scenes) * 15)
+                await self._set_progress(task_id, p)
+                
                 duration = float(scene.get("duration", 0) or 0)
                 target_words = max(3, int(duration * cfg["tts"]["voiceover_wps"]))
                 try:
@@ -263,12 +268,6 @@ class Orchestrator:
                         "info",
                         f"Voiceover {idx}/{len(scenes)}: {len(voice_text.split())} words",
                     )
-                    await self._log(
-                        task_id, "info", f"Voiceover text {idx}: {voice_text[:300]}"
-                    )
-                    await self._log(
-                        task_id, "raw", f"Voiceover text {idx} (full): {voice_text}"
-                    )
                 except Exception as exc:
                     await self._log(
                         task_id,
@@ -277,6 +276,7 @@ class Orchestrator:
                     )
                     scene["voiceover"] = scene.get("voiceover", "")
 
+            await self._set_progress(task_id, 30)
             use_stock_video = bool(options.get("use_stock_video", True))
             use_images = bool(options.get("use_images", True))
             
@@ -290,6 +290,12 @@ class Orchestrator:
             music_dir = os.path.join(workspace, DEFAULT_DIRS["music"])
             os.makedirs(music_dir, exist_ok=True)
 
+            # Asset gathering: 30% -> 60%
+            async def asset_progress(p_module: float):
+                # p_module is 0.0 to 1.0
+                p_overall = 30 + int(p_module * 30)
+                await self._set_progress(task_id, p_overall)
+
             try:
                 assets = await scraper.gather_scene_assets(
                     scenes,
@@ -301,12 +307,14 @@ class Orchestrator:
                     scraper_settings=cfg["scraper"],
                     ai_query_model=cfg["ai_query"]["model"],
                     ai_query_api_url=cfg["ai_query"]["api_url"],
+                    progress_fn=asset_progress,
                 )
             except Exception as e:
                 await self._log(task_id, "error", f"Asset gathering failed: {e}")
                 # Don't re-raise yet, try to continue with empty assets if possible
                 assets = [{"video": None, "image": None} for _ in scenes]
 
+            await self._set_progress(task_id, 60)
             fallback_video = next(
                 (a.get("video") for a in assets if a.get("video")), None
             )
@@ -330,6 +338,10 @@ class Orchestrator:
                     task_id, "info", "Running vision analysis on downloaded images"
                 )
                 for idx, scene in enumerate(scenes, start=1):
+                    # Vision analysis: 60% -> 70%
+                    p = 60 + int((idx / num_scenes) * 10)
+                    await self._set_progress(task_id, p)
+                    
                     image_path = (
                         assets[idx - 1].get("image") if idx - 1 < len(assets) else None
                     )
@@ -361,7 +373,7 @@ class Orchestrator:
                             f"Vision analysis failed for scene {idx}: {exc}",
                         )
 
-            await self._set_progress(task_id, 35)
+            await self._set_progress(task_id, 70)
             texts = [scene.get("voiceover", "") for scene in scenes]
             voice_dir = os.path.join(workspace, DEFAULT_DIRS["voice"])
             await self._log(
@@ -369,6 +381,12 @@ class Orchestrator:
                 "info",
                 f"TTS engine: {cfg['tts']['engine']} (coqui_model={cfg['tts']['coqui_model']}, speaker={cfg['tts']['coqui_speaker']})",
             )
+            
+            # TTS generation: 70% -> 85%
+            async def tts_progress(p_module: float):
+                p_overall = 70 + int(p_module * 15)
+                await self._set_progress(task_id, p_overall)
+
             voiceovers = await tts_engine.generate_voiceovers(
                 texts,
                 voice_dir,
@@ -379,9 +397,10 @@ class Orchestrator:
                 engine=cfg["tts"]["engine"],
                 coqui_model=cfg["tts"]["coqui_model"],
                 coqui_speaker=cfg["tts"]["coqui_speaker"],
+                progress_fn=tts_progress,
             )
 
-            await self._set_progress(task_id, 55)
+            await self._set_progress(task_id, 85)
             subtitle_path = None
             if options.get("burn_subtitles", True):
                 offsets = []
@@ -399,7 +418,7 @@ class Orchestrator:
                     format_choice=options.get("format", "16:9"),
                 )
 
-            await self._set_progress(task_id, 70)
+            await self._set_progress(task_id, 90)
             music_path = None
             music_dir = os.path.join(workspace, DEFAULT_DIRS["music"])
 
@@ -458,7 +477,7 @@ class Orchestrator:
                         "No music found, continuing without background music",
                     )
 
-            await self._set_progress(task_id, 80)
+            await self._set_progress(task_id, 95)
             output_path = os.path.join(OUTPUT_DIR, f"{task_id}.mp4")
             os.makedirs(OUTPUT_DIR, exist_ok=True)
 

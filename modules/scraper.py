@@ -486,6 +486,7 @@ async def gather_scene_assets(
     scraper_settings: Optional[Dict[str, Any]] = None,
     ai_query_model: Optional[str] = None,
     ai_query_api_url: Optional[str] = None,
+    progress_fn: Optional[Callable[[float], Awaitable[None]]] = None,
 ) -> List[Dict[str, Optional[str]]]:
     """
     Gather assets for all scenes with proper rate limiting.
@@ -517,7 +518,12 @@ async def gather_scene_assets(
     first_image = None
 
     # Process scenes SEQUENTIALLY to avoid rate limiting
+    num_scenes = len(scenes)
     for idx, scene in enumerate(scenes, start=1):
+        if progress_fn:
+            # Progress within gather_scene_assets is from 0.0 to 1.0
+            await progress_fn((idx - 1) / num_scenes)
+
         entry: Dict[str, Optional[str]] = {"video": None, "image": None}
 
         # Add delay between scenes to avoid YouTube rate limits

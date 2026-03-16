@@ -101,6 +101,7 @@ async def generate_voiceovers(
     engine: str = "piper",
     coqui_model: Optional[str] = None,
     coqui_speaker: Optional[str] = None,
+    progress_fn: Optional[Callable[[float], Awaitable[None]]] = None,
 ) -> List[str]:
     """
     Generate voiceovers with fallback mechanism.
@@ -145,6 +146,7 @@ async def generate_voiceovers(
                 model_name=coqui_model,
                 speaker=coqui_speaker,
                 language=language,
+                progress_fn=progress_fn,
             )
         except Exception as exc:
             await log("error", f"Coqui TTS failed: {exc}. Falling back to Piper.")
@@ -159,9 +161,12 @@ async def generate_voiceovers(
             await log("info", note)
 
         outputs: List[str] = []
+        num_texts = len(valid_texts)
         for idx, text in enumerate(valid_texts, start=1):
+            if progress_fn:
+                await progress_fn((idx - 1) / num_texts)
             out_path = os.path.join(out_dir, f"voice_{idx}.wav")
-            await log("info", f"Generating voiceover {idx}/{len(valid_texts)}")
+            await log("info", f"Generating voiceover {idx}/{num_texts}")
             try:
                 code = await _run_piper(
                     text, resolved_voice, resolved_config, out_path, log
@@ -198,6 +203,7 @@ async def _generate_coqui(
     model_name: Optional[str],
     speaker: Optional[str],
     language: Optional[str],
+    progress_fn: Optional[Callable[[float], Awaitable[None]]] = None,
 ) -> List[str]:
     """
     Generate voiceovers using Coqui TTS with comprehensive error handling.
@@ -213,6 +219,7 @@ async def _generate_coqui(
             log,
             language=language,
             engine="piper",
+            progress_fn=progress_fn,
         )
 
     # Use default model if none specified
@@ -240,15 +247,18 @@ async def _generate_coqui(
                 log,
                 language=language,
                 engine="piper",
+                progress_fn=progress_fn,
             )
 
     outputs: List[str] = []
-
+    num_texts = len(texts)
     for idx, text in enumerate(texts, start=1):
+        if progress_fn:
+            await progress_fn((idx - 1) / num_texts)
         out_path = os.path.join(out_dir, f"voice_{idx}.wav")
         await log(
             "info",
-            f"Generating voiceover {idx}/{len(texts)} with Coqui (speaker={speaker})",
+            f"Generating voiceover {idx}/{num_texts} with Coqui (speaker={speaker})",
         )
         try:
             await asyncio.to_thread(
@@ -273,6 +283,7 @@ async def _generate_coqui(
             log,
             language=language,
             engine="piper",
+            progress_fn=progress_fn,
         )
 
     return outputs

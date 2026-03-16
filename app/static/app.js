@@ -221,6 +221,10 @@ async function initDashboard() {
       const active = tasks.find((t) => t.id === data.task_id);
       if (!active) return;
       qs('#taskStatus').textContent = `${active.status} (${active.progress || 0}%)`;
+      const progressFill = qs('#progressFill');
+      if (progressFill) {
+        progressFill.style.width = `${active.progress || 0}%`;
+      }
       if (active.status === 'Completed' || active.status === 'Failed') {
         clearInterval(poll);
         generateBtn.disabled = false;
