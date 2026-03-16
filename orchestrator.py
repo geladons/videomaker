@@ -239,7 +239,7 @@ class Orchestrator:
             )
             for idx, scene in enumerate(scenes, start=1):
                 duration = float(scene.get("duration", 0) or 0)
-                target_words = max(12, int(duration * cfg["tts"]["voiceover_wps"]))
+                target_words = max(3, int(duration * cfg["tts"]["voiceover_wps"]))
                 try:
                     voice_text = await llm.generate_voiceover(
                         scene,

@@ -139,7 +139,7 @@ DEFAULT_OLLAMA_VISION_PARAMS = {
 
 DEFAULT_OLLAMA_REQUEST_DELAY = float(os.environ.get("OLLAMA_REQUEST_DELAY", "0.8"))
 
-DEFAULT_VOICEOVER_WPS = float(os.environ.get("VOICEOVER_WORDS_PER_SEC", "2.2"))
+DEFAULT_VOICEOVER_WPS = float(os.environ.get("VOICEOVER_WORDS_PER_SEC", "2.0"))
 
 DEFAULT_SCRAPER = {
     "request_delay_sec": float(os.environ.get("SCRAPER_REQUEST_DELAY", "1.2")),

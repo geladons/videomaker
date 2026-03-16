@@ -219,7 +219,7 @@ async def generate_voiceover(
 ) -> str:
     if target_words <= 0:
         target_words = 30
-    min_words = max(10, int(target_words * 0.7))
+    min_words = max(2, int(target_words * 0.7))
     max_words = max(min_words + 4, int(target_words * 1.3))
 
     base_outline = (
