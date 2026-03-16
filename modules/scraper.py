@@ -522,21 +522,37 @@ async def gather_scene_assets(
             )
             await asyncio.sleep(scene_delay)
 
-        # Video download - ONLY ONE attempt per scene to avoid rate limits
+        # Video download - try multiple queries for better hit rate
         if use_stock_video:
             base_query = scene.get("visual_query", "cinematic background")
-
-            # CRITICAL: Clean up query for video search
+            
+            # 1. Primary query
             video_query = _clean_query_for_video(base_query)
+            # 2. Broader query (fewer words)
+            words = video_query.split()
+            broad_query = " ".join(words[:2]) + " CC" if len(words) > 2 else video_query
+            # 3. Fallback topic query
+            fallback_q = _clean_query_for_video(fallback_topic) if fallback_topic else "nature CC"
 
-            queries = [video_query]  # Only one query per scene
+            queries = [video_query, broad_query, fallback_q]
+            # Remove duplicates while preserving order
+            seen_q = set()
+            unique_queries = []
+            for q in queries:
+                if q not in seen_q:
+                    unique_queries.append(q)
+                    seen_q.add(q)
 
             video_path = None
-            for query in queries:
-                await log("info", f"Searching CC video for scene {idx}: {query}")
-                video_path = await download_cc_video(
-                    query, video_dir, log, scraper_settings=settings
-                )
+            for q_idx, query in enumerate(unique_queries):
+                await log("info", f"Searching CC video for scene {idx} (attempt {q_idx+1}): {query}")
+                try:
+                    video_path = await download_cc_video(
+                        query, video_dir, log, scraper_settings=settings
+                    )
+                except Exception as e:
+                    await log("warn", f"Video search attempt {q_idx+1} failed: {e}")
+                    
                 if video_path:
                     if first_video is None:
                         first_video = video_path
@@ -547,7 +563,7 @@ async def gather_scene_assets(
 
             entry["video"] = video_path
             if not video_path:
-                await log("warn", f"No CC video for scene {idx}, will use fallback")
+                await log("warn", f"No CC video for scene {idx} after all attempts")
 
         # Image download
         if use_images:
@@ -555,12 +571,23 @@ async def gather_scene_assets(
 
             # Clean up query for images
             image_query = _clean_query_for_image(base_query)
+            # Broader query
+            words = image_query.split()
+            broad_query = " ".join(words[:1]) if len(words) > 1 else image_query
+            # Fallback
+            fallback_q = _clean_query_for_image(fallback_topic) if fallback_topic else "abstract"
 
-            queries = [image_query]
+            queries = [image_query, broad_query, fallback_q]
+            seen_q = set()
+            unique_queries = []
+            for q in queries:
+                if q not in seen_q:
+                    unique_queries.append(q)
+                    seen_q.add(q)
 
             image_path = None
-            for query in queries:
-                await log("info", f"Searching images for scene {idx}: {query}")
+            for q_idx, query in enumerate(unique_queries):
+                await log("info", f"Searching images for scene {idx} (attempt {q_idx+1}): {query}")
                 urls = []
                 try:
                     urls = await search_wikimedia_images(query, limit=2)
@@ -571,14 +598,18 @@ async def gather_scene_assets(
                         urls = await search_duckduckgo_images(query, limit=2)
                     except httpx.HTTPError:
                         pass
+                
                 if urls:
-                    target = os.path.join(image_dir, f"scene_{idx}.jpg")
+                    target = os.path.join(image_dir, f"scene_{idx}_{q_idx}.jpg")
                     for url in urls:
-                        if await download_image(url, target):
-                            image_path = target
-                            if first_image is None:
-                                first_image = image_path
-                            break
+                        try:
+                            if await download_image(url, target):
+                                image_path = target
+                                if first_image is None:
+                                    first_image = image_path
+                                break
+                        except Exception as e:
+                            await log("warn", f"Image download failed from {url}: {e}")
                     if image_path:
                         break
                 if image_delay > 0:
@@ -586,11 +617,25 @@ async def gather_scene_assets(
 
             entry["image"] = image_path
             if not image_path:
-                await log("warn", f"No images for scene {idx}, will use fallback")
+                await log("warn", f"No images for scene {idx} after all attempts")
 
         assets.append(entry)
 
-    # Apply fallback for missing assets - use first available
+    # Apply global fallback if still missing - use first available from ANY scene
+    # or a generic nature/abstract asset if none were found at all
+    if not first_video and use_stock_video:
+        await log("warn", "NO videos found for ANY scene. Attempting ultimate fallback search.")
+        first_video = await download_cc_video("nature cinematic CC", video_dir, log, scraper_settings=settings)
+        
+    if not first_image and use_images:
+        await log("warn", "NO images found for ANY scene. Attempting ultimate fallback search.")
+        urls = await search_wikimedia_images("nature", limit=1)
+        if urls:
+            target = os.path.join(image_dir, "ultimate_fallback.jpg")
+            if await download_image(urls[0], target):
+                first_image = target
+
+    # Apply fallback for missing assets - use first available (including ultimate fallbacks)
     if first_video or first_image:
         for entry in assets:
             if use_stock_video and not entry.get("video") and first_video:
@@ -598,7 +643,7 @@ async def gather_scene_assets(
             if use_images and not entry.get("image") and first_image:
                 entry["image"] = first_image
         await log(
-            "info", "Reused first available video/image for scenes missing assets"
+            "info", "Reused available assets for scenes missing specific content"
         )
 
     return assets
