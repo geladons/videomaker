@@ -39,7 +39,7 @@ async def download_cc_video(
     log: LogFn,
     scraper_settings: Optional[Dict[str, Any]] = None,
 ) -> Optional[str]:
-    # CRITICAL: Always ensure directory exists before download
+    # Ensure directory exists before download
     ensure_dir(out_dir)
     await asyncio.sleep(0.1)  # Small delay to ensure FS sync
 
@@ -70,10 +70,14 @@ async def download_cc_video(
     if delay_sec > 0:
         await asyncio.sleep(delay_sec)
     code = await run_command(base_cmd + ["--match-filter", match_filter], log=log)
-    if code != 0:
+    
+    # Check if a file was actually downloaded despite potential exit code 1 (warnings)
+    latest = await _latest_file(out_dir, [".mp4", ".mkv", ".webm"])
+    
+    if code != 0 and not latest:
         await log("error", f"No Creative Commons video found for query: {query}")
         return None
-    latest = await _latest_file(out_dir, [".mp4", ".mkv", ".webm"])
+    
     if not latest:
         await log(
             "error", f"yt-dlp completed but no video file found for query: {query}"
@@ -87,7 +91,7 @@ async def download_cc_audio(
     log: LogFn,
     scraper_settings: Optional[Dict[str, Any]] = None,
 ) -> Optional[str]:
-    # CRITICAL: Always ensure directory exists before download
+    # Ensure directory exists before download
     ensure_dir(out_dir)
     await asyncio.sleep(0.1)  # Small delay to ensure FS sync
 
@@ -132,10 +136,14 @@ async def download_cc_audio(
 
     await log("info", f"Downloading audio: yt-dlp {safe_query} creative commons")
     code = await run_command(base_cmd + ["--match-filter", match_filter], log=log)
-    if code != 0:
+    
+    # Check if a file was actually downloaded despite potential exit code 1 (warnings)
+    latest = await _latest_file(out_dir, [".mp3", ".m4a", ".wav", ".ogg"])
+    
+    if code != 0 and not latest:
         await log("error", f"No Creative Commons audio found for query: {query}")
         return None
-    latest = await _latest_file(out_dir, [".mp3", ".m4a", ".wav", ".ogg"])
+    
     if not latest:
         await log(
             "error", f"yt-dlp completed but no audio file found for query: {query}"

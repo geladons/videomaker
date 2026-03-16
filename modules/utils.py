@@ -42,12 +42,24 @@ async def run_command(
                 else:
                     await log(level, text)
 
-    await asyncio.gather(
-        _stream(process.stdout, "info"),
-        _stream(process.stderr, "error"),
-    )
-
-    return await process.wait()
+    try:
+        await asyncio.gather(
+            _stream(process.stdout, "info"),
+            _stream(process.stderr, "error"),
+        )
+        return await process.wait()
+    except asyncio.CancelledError:
+        try:
+            process.kill()
+        except OSError:
+            pass
+        raise
+    finally:
+        try:
+            if process.returncode is None:
+                process.kill()
+        except OSError:
+            pass
 
 
 async def run_shell(

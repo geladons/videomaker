@@ -266,13 +266,14 @@ class Orchestrator:
 
             use_stock_video = bool(options.get("use_stock_video", True))
             use_images = bool(options.get("use_images", True))
+            
+            # Limit fallback topic to prevent massive search queries
             fallback_topic = prompt.splitlines()[0].strip() if prompt else None
+            if fallback_topic and len(fallback_topic) > 100:
+                fallback_topic = fallback_topic[:100] + "..."
 
-            # Ensure music directory exists BEFORE download
-            music_dir = os.path.join(workspace, "music")
-            os.makedirs(music_dir, exist_ok=True)
-
-            # Ensure music directory exists BEFORE download (double safety)
+            # Ensure workspace and subdirs exist
+            os.makedirs(workspace, exist_ok=True)
             music_dir = os.path.join(workspace, "music")
             os.makedirs(music_dir, exist_ok=True)
 
@@ -280,17 +281,23 @@ class Orchestrator:
             ai_query_model = await get_setting("ai_query_model", None)
             ai_query_api_url = await get_setting("ai_query_api_url", OLLAMA_API_URL)
 
-            assets = await scraper.gather_scene_assets(
-                scenes,
-                workspace,
-                use_stock_video,
-                use_images,
-                lambda lvl, msg: self._log(task_id, lvl, msg),
-                fallback_topic=fallback_topic,
-                scraper_settings=scraper_settings,
-                ai_query_model=ai_query_model,
-                ai_query_api_url=ai_query_api_url,
-            )
+            try:
+                assets = await scraper.gather_scene_assets(
+                    scenes,
+                    workspace,
+                    use_stock_video,
+                    use_images,
+                    lambda lvl, msg: self._log(task_id, lvl, msg),
+                    fallback_topic=fallback_topic,
+                    scraper_settings=scraper_settings,
+                    ai_query_model=ai_query_model,
+                    ai_query_api_url=ai_query_api_url,
+                )
+            except Exception as e:
+                await self._log(task_id, "error", f"Asset gathering failed: {e}")
+                # Don't re-raise yet, try to continue with empty assets if possible
+                assets = [{"video": None, "image": None} for _ in scenes]
+
             fallback_video = next(
                 (a.get("video") for a in assets if a.get("video")), None
             )
@@ -387,10 +394,10 @@ class Orchestrator:
             music_path = None
             music_dir = os.path.join(workspace, "music")
 
-            # Ensure music directory exists before download (double safety)
-            os.makedirs(music_dir, exist_ok=True)
-
             if options.get("add_music", True):
+                # Ensure music directory exists before download
+                os.makedirs(music_dir, exist_ok=True)
+                
                 base_query = (
                     f"{timeline.get('music_mood', 'cinematic')} background music"
                 )
@@ -401,17 +408,26 @@ class Orchestrator:
                     "cinematic music",
                 ]
                 for query in [q for q in queries if q]:
+                    # Defensive check: recreate dir if disappeared
+                    if not os.path.exists(music_dir):
+                        await self._log(task_id, "warn", f"Music directory missing, recreating: {music_dir}")
+                        os.makedirs(music_dir, exist_ok=True)
+                        
                     await self._log(
                         task_id, "info", f"Trying to download music: {query}"
                     )
-                    music_path = await scraper.download_cc_audio(
-                        query,
-                        music_dir,
-                        lambda lvl, msg: self._log(task_id, lvl, msg),
-                        scraper_settings=scraper_settings,
-                    )
-                    if music_path:
-                        break
+                    try:
+                        music_path = await scraper.download_cc_audio(
+                            query,
+                            music_dir,
+                            lambda lvl, msg: self._log(task_id, lvl, msg),
+                            scraper_settings=scraper_settings,
+                        )
+                        if music_path and os.path.exists(music_path):
+                            await self._log(task_id, "info", f"Successfully obtained music: {os.path.basename(music_path)}")
+                            break
+                    except Exception as e:
+                        await self._log(task_id, "error", f"Music download attempt failed for query '{query}': {e}")
 
                 # If still no music, check if there's any existing audio file in music dir
                 if not music_path:
@@ -508,25 +524,37 @@ class Orchestrator:
     def _cleanup_workspace(
         self, workspace: str, keep: Optional[list[str]] = None
     ) -> None:
-        keep = [path for path in (keep or []) if path]
+        keep = [os.path.abspath(path) for path in (keep or []) if path]
         if not os.path.exists(workspace):
             return
+            
+        workspace_abs = os.path.abspath(workspace)
+        
+        # NEVER delete the entire WORKSPACE_DIR
+        if workspace_abs == os.path.abspath(WORKSPACE_DIR):
+            return
+
         for root, dirs, files in os.walk(workspace, topdown=False):
             for name in files:
-                path = os.path.join(root, name)
-                if path in keep:
+                path = os.path.abspath(os.path.join(root, name))
+                if any(path == k or path.startswith(k + os.sep) for k in keep):
                     continue
                 try:
                     os.remove(path)
                 except OSError:
                     pass
             for name in dirs:
-                path = os.path.join(root, name)
+                path = os.path.abspath(os.path.join(root, name))
+                if any(path == k or path.startswith(k + os.sep) for k in keep):
+                    continue
                 try:
                     shutil.rmtree(path)
                 except OSError:
                     pass
+        
         try:
-            shutil.rmtree(workspace)
+            # Only remove the workspace dir itself if no 'keep' files are inside it
+            if not any(k.startswith(workspace_abs + os.sep) for k in keep):
+                shutil.rmtree(workspace)
         except OSError:
             pass
