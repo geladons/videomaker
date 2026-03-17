@@ -39,7 +39,7 @@ PIPER_VOICE_CONFIG = os.environ.get(
 
 # TTS Engine Defaults
 DEFAULT_TTS_ENGINE = os.environ.get("TTS_ENGINE", "coqui")
-DEFAULT_COQUI_MODEL = os.environ.get("COQUI_TTS_MODEL", "tts_models/en/vctk/vits")
+DEFAULT_COQUI_MODEL = os.environ.get("COQUI_TTS_MODEL", "tts_models/multilingual/multi-dataset/xtts_v2")
 DEFAULT_COQUI_SPEAKER = os.environ.get("COQUI_TTS_SPEAKER", "")
 
 # VCTK speaker IDs - p225-p335 are available

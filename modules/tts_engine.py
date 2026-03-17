@@ -253,8 +253,18 @@ async def _generate_coqui(
             f"Generating voiceover {idx}/{num_texts} with Coqui (speaker={speaker})",
         )
         try:
+            # Prepare arguments for tts_to_file
+            tts_args = {
+                "text": text.strip(),
+                "file_path": out_path,
+                "speaker": speaker,
+            }
+            # Only add language if the model is XTTS (or multilingual)
+            if model_name and "xtts" in model_name.lower():
+                tts_args["language"] = language
+
             await asyncio.to_thread(
-                tts.tts_to_file, text=text.strip(), file_path=out_path, speaker=speaker
+                tts.tts_to_file, **tts_args
             )
             if os.path.exists(out_path) and os.path.getsize(out_path) > 0:
                 outputs[idx-1] = out_path
