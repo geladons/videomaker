@@ -21,6 +21,7 @@ apt-get install -y --no-install-recommends \
   libsndfile1 \
   libomp5 \
   espeak-ng \
+  fonts-inter \
   software-properties-common \
   ca-certificates \
   gnupg \

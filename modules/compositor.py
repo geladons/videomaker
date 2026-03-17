@@ -21,7 +21,7 @@ def _escape_ffmpeg_path(path: str) -> str:
     Escapes a path for use in FFmpeg filters (e.g., drawtext textfile, ass).
     FFmpeg filtergraph parser requires escaping of colons and backslashes.
     """
-    return path.replace("\\", "\\\\").replace(":", "\\:")
+    return path.replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")
 
 
 def _build_scene_command(
@@ -186,7 +186,9 @@ async def compose_video(
     concat_list = os.path.join(scene_dir, "concat.txt")
     with open(concat_list, "w", encoding="utf-8") as f:
         for path in scene_files:
-            f.write(f"file '{path}'\n")
+            # Escape single quotes in path for FFmpeg concat file format
+            safe_path = path.replace("'", "''")
+            f.write(f"file '{safe_path}'\n")
 
     concat_out = os.path.join(workspace, "concat.mp4")
     concat_cmd = [
@@ -198,8 +200,12 @@ async def compose_video(
         "0",
         "-i",
         concat_list,
-        "-c",
-        "copy",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "veryfast",
+        "-c:a",
+        "aac",
         concat_out,
     ]
     await log("info", "Concatenating scenes")
