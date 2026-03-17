@@ -214,11 +214,10 @@ class Orchestrator:
             )
 
             scenes = timeline.get("scenes", [])
-            await self._normalize_scene_durations(
-                task_id,
-                scenes,
-                float(options.get("duration", timeline.get("total_duration", 0)) or 0),
-            )
+            
+            # Note: We skip premature normalization here. 
+            # Scenes keep their initial LLM-suggested durations as "hints" for script generation.
+            
             await self._set_progress(task_id, 15)
             await self._log(task_id, "info", f"Generated {len(scenes)} scenes")
 
@@ -402,22 +401,28 @@ class Orchestrator:
                 progress_fn=tts_progress,
             )
 
-            # Adjust durations based on actual audio length
+            # Finalize durations based on actual audio length
             for i, (scene, voice_file) in enumerate(zip(scenes, voiceovers)):
                 if voice_file and os.path.exists(voice_file):
                     audio_dur = get_wav_duration(voice_file)
                     if audio_dur > 0:
-                        # Extend scene duration if audio is longer, add 0.3s padding
-                        target_dur = round(audio_dur + 0.3, 2)
-                        current_dur = float(scene.get("duration", 0))
-                        if target_dur > current_dur:
-                            await self._log(
-                                task_id,
-                                "info",
-                                f"Extending scene {i+1} duration from {current_dur:.2f}s to {target_dur:.2f}s (audio={audio_dur:.2f}s)",
-                            )
-                            scene["duration"] = target_dur
+                        # Ensure scene is at least audio_dur + padding
+                        scene["duration"] = round(audio_dur + 0.3, 2)
+                    else:
+                        # Default fallback if audio duration couldn't be read
+                        scene["duration"] = float(scene.get("duration", 4))
+                else:
+                    # Keep current hint if no voiceover exists
+                    scene["duration"] = float(scene.get("duration", 4))
 
+            # Final normalization to target duration, only scaling UP if needed.
+            await self._normalize_scene_durations(
+                task_id,
+                scenes,
+                float(options.get("duration", timeline.get("total_duration", 0)) or 0),
+                is_final=True,
+            )
+            
             await self._set_progress(task_id, 85)
             subtitle_path = None
             if options.get("burn_subtitles", True):
@@ -530,6 +535,7 @@ class Orchestrator:
         task_id: str,
         scenes: list[dict[str, Any]],
         target_duration: float,
+        is_final: bool = False,
     ) -> None:
         if not scenes or target_duration <= 0:
             return
@@ -550,6 +556,16 @@ class Orchestrator:
                 task_id,
                 "info",
                 f"Assigned uniform scene durations for {target_duration:.2f}s target",
+            )
+            return
+
+        # If this is the final normalization and the current total already exceeds the target,
+        # we do NOT scale down as it would cut off audio.
+        if is_final and total >= target_duration:
+            await self._log(
+                task_id,
+                "info",
+                f"Current total duration ({total:.2f}s) meets or exceeds target ({target_duration:.2f}s). Skipping normalization to avoid audio truncation.",
             )
             return
 

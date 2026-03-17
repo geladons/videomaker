@@ -5,7 +5,7 @@ import tempfile
 from typing import Awaitable, Callable, Dict, List, Optional
 
 from config import DEFAULT_VIDEO
-from modules.utils import ensure_dir, run_command
+from modules.utils import ensure_dir, get_wav_duration, run_command
 
 LogFn = Callable[[str, str], Awaitable[None]]
 
@@ -85,12 +85,13 @@ def _build_scene_command(
     else:
         video_map = current_label
 
+    # Audio source and padding
     if voiceover and os.path.exists(voiceover):
         inputs.extend(["-i", voiceover])
         audio_source = f"{input_offset}:a"
     else:
         # Fallback to silent audio if voiceover is missing
-        inputs.extend(["-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100"])
+        inputs.extend(["-f", "lavfi", "-i", f"anullsrc=channel_layout=stereo:sample_rate=44100:d={duration}"])
         audio_source = f"{input_offset}:a"
     
     input_offset += 1
@@ -107,7 +108,7 @@ def _build_scene_command(
         "-map",
         audio_source,
         "-af",
-        f"apad=pad_dur={duration}",
+        "apad",  # Pad with silence if audio is shorter than -t
         "-t",
         str(duration),
         "-c:v",
@@ -144,9 +145,16 @@ async def compose_video(
     scene_files: List[str] = []
     for idx, scene in enumerate(scenes, start=1):
         duration = float(scene.get("duration", 4))
+        voice = voiceovers[idx - 1] if idx - 1 < len(voiceovers) else None
+
+        # Double safety: ensure scene is at least as long as audio (with padding)
+        if voice and os.path.exists(voice):
+            audio_dur = get_wav_duration(voice)
+            if audio_dur + 0.1 > duration:
+                duration = round(audio_dur + 0.3, 2)
+                
         bg_video = assets[idx - 1].get("video") if idx - 1 < len(assets) else None
         overlay = assets[idx - 1].get("image") if idx - 1 < len(assets) else None
-        voice = voiceovers[idx - 1] if idx - 1 < len(voiceovers) else None
         overlay_text = scene.get("overlay_text") if not overlay else None
         font_name = str(video_settings.get("font_name", DEFAULT_VIDEO["font_name"]))
         font_size = int(video_settings.get("font_size", DEFAULT_VIDEO["font_size"]))
