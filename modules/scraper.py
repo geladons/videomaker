@@ -120,6 +120,7 @@ async def download_cc_audio(
     out_dir: str,
     log: LogFn,
     scraper_settings: Optional[Dict[str, Any]] = None,
+    mood: str = "cinematic",
 ) -> Optional[str]:
     # Ensure directory exists before download
     ensure_dir(out_dir)
@@ -142,7 +143,7 @@ async def download_cc_audio(
     safe_query = _limit_query(clean_query, max_words=4)
 
     if not safe_query:
-        safe_query = "upbeat music"
+        safe_query = f"{mood} music"
 
     base_cmd = [
         "yt-dlp",
@@ -175,20 +176,23 @@ async def download_cc_audio(
         if latest:
             await log("warn", f"yt-dlp exited with code {code} but audio file was produced.")
         else:
-            await log("error", f"No Creative Commons audio found for query: {query}")
+            await log("warn", f"No Creative Commons audio found for query: {query}. Trying fallback...")
             _cleanup_temp_files(out_dir, [".part", ".ytdl"], min_mtime=start_time)
-            return None
+            return await _download_audio_fallback(query, out_dir, log, settings, mood=mood)
     
     if not latest:
         await log(
-            "error", f"yt-dlp completed but no audio file found for query: {query}"
+            "warn", f"yt-dlp completed but no audio file found for query: {query}. Trying fallback..."
         )
+        return await _download_audio_fallback(query, out_dir, log, settings, mood=mood)
+
     return latest
 
 
 async def _download_from_internet_archive(
     query: str, out_dir: str, log: LogFn
 ) -> Optional[str]:
+
     """Download audio from Internet Archive (CC0/CC-BY music)."""
     try:
         # Search Internet Archive for music
@@ -269,7 +273,7 @@ async def _download_from_internet_archive(
 
 
 async def _download_audio_fallback(
-    query: str, out_dir: str, log: LogFn, settings: Dict[str, Any]
+    query: str, out_dir: str, log: LogFn, settings: Dict[str, Any], mood: str = "cinematic"
 ) -> Optional[str]:
     """Fallback audio download - tries simpler approach."""
     try:
@@ -280,7 +284,7 @@ async def _download_audio_fallback(
         simple_query = _limit_query(simple_query, max_words=3)
 
         if not simple_query:
-            simple_query = "upbeat music"
+            simple_query = f"{mood} music"
 
         # Try yt-dlp with simpler settings
         cmd = [
@@ -322,30 +326,6 @@ async def _download_audio_fallback(
     except Exception as e:
         await log("warn", f"Audio fallback failed: {e}")
         return None
-
-
-async def search_duckduckgo_images(query: str, limit: int = 3) -> List[str]:
-    url = SCRAPER_URLS["duckduckgo"]
-    params = {"q": query}
-    headers = {"User-Agent": "Mozilla/5.0"}
-    async with httpx.AsyncClient(timeout=30, headers=headers) as client:
-        response = await client.post(url, data=params)
-        response.raise_for_status()
-        soup = BeautifulSoup(response.text, "html.parser")
-
-    image_urls = []
-    for img in soup.select("img"):
-        src = img.get("data-src") or img.get("src")
-        if not src:
-            continue
-        if src.startswith("data:"):
-            continue
-        if "duckduckgo.com" in src:
-            continue
-        image_urls.append(src)
-        if len(image_urls) >= limit:
-            break
-    return image_urls
 
 
 async def search_wikimedia_images(query: str, limit: int = 3) -> List[str]:
@@ -604,13 +584,9 @@ async def gather_scene_assets(
                     urls = await search_wikimedia_images(query, limit=2)
                 except httpx.HTTPError:
                     pass
-                if not urls:
-                    try:
-                        urls = await search_duckduckgo_images(query, limit=2)
-                    except httpx.HTTPError:
-                        pass
-                
+
                 if urls:
+
                     target = os.path.join(image_dir, f"scene_{idx}_{q_idx}.jpg")
                     for url in urls:
                         try:

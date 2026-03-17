@@ -450,6 +450,7 @@ class Orchestrator:
                             music_dir,
                             lambda lvl, msg: self._log(task_id, lvl, msg),
                             scraper_settings=cfg["scraper"],
+                            mood=timeline.get("music_mood", "cinematic"),
                         )
                         if music_path and os.path.exists(music_path):
                             await self._log(task_id, "info", f"Successfully obtained music: {os.path.basename(music_path)}")

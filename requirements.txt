@@ -7,7 +7,7 @@ beautifulsoup4==4.12.3
 pydantic==2.9.2
 python-multipart==0.0.12
 ffmpeg-python==0.2.0
-yt-dlp==2024.8.6
+yt-dlp>=2025.01.15
 faster-whisper==1.0.3
 huggingface_hub==0.24.6
 json5==0.9.25
