@@ -18,7 +18,8 @@ from modules.ai_helper import (
     Timeline,
     call_llm_with_retry,
     _extract_json,
-    _repair_json_deterministic,
+    repair_json,
+    LLMResponseError,
     LogFn
 )
 from modules.utils import clean_and_tokenize
@@ -83,7 +84,12 @@ def _build_payload(
         "think": think,
         "options": options,
     }
-    if force_json:
+    
+    # Certain models (Qwen, Llama 3) struggle with Ollama's 'format: json'
+    # which can lead to empty responses or infinite loops.
+    skip_json_format = any(m in model.lower() for m in ["qwen", "llama3", "llama-3"])
+    
+    if force_json and not skip_json_format:
         payload["format"] = "json"
     return payload
 
@@ -175,6 +181,29 @@ async def plan_timeline(
         if isinstance(result, Timeline):
             return result.model_dump()
         return result
+
+    except LLMResponseError as e:
+        if log:
+            await log("warn", f"LLM parsing failed. Attempting AI repair: {e}")
+        try:
+            repaired = await repair_json(
+                raw_text=e.raw_text,
+                schema_hint=_schema_hint(),
+                api_url=api_url,
+                model=e.model or model,
+                options=e.options or merged_options,
+                timeout=timeout,
+                think=think,
+                log=log
+            )
+            # Re-validate with Timeline model
+            from modules.ai_helper import validate_json
+            validated = validate_json(repaired, Timeline)
+            return validated.model_dump()
+        except Exception as repair_exc:
+            if log:
+                await log("error", f"JSON repair failed: {repair_exc}")
+            return _fallback_timeline(prompt, target_duration)
 
     except Exception as exc:
         if log:

@@ -13,6 +13,15 @@ LogFn = Callable[[str, str], Awaitable[None]]
 T = TypeVar("T", bound=BaseModel)
 
 
+class LLMResponseError(Exception):
+    """Exception raised when LLM response extraction or validation fails."""
+    def __init__(self, message: str, raw_text: str, model: str = "", options: Dict[str, Any] = None):
+        super().__init__(message)
+        self.raw_text = raw_text
+        self.model = model
+        self.options = options or {}
+
+
 class Scene(BaseModel):
     id: int
     duration: float
@@ -267,8 +276,18 @@ async def call_llm_with_retry(
             if not text:
                 raise ValueError("Empty response from model")
             
-            extracted = _extract_json(text)
-            
+            try:
+                extracted = _extract_json(text)
+            except Exception as e:
+                if attempt == max_retries:
+                    raise LLMResponseError(
+                        f"Failed to extract JSON after all retries: {e}",
+                        raw_text=text,
+                        model=current_payload.get("model", ""),
+                        options=current_payload.get("options", {})
+                    )
+                raise
+
             if validation_model:
                 try:
                     return validate_json(extracted, validation_model)
@@ -280,9 +299,17 @@ async def call_llm_with_retry(
                         # Maybe try without 'format: json' or with 'think: False'
                         current_payload["think"] = False
                         continue
-                    raise
+                    raise LLMResponseError(
+                        f"Pydantic validation failed: {e}",
+                        raw_text=text,
+                        model=current_payload.get("model", ""),
+                        options=current_payload.get("options", {})
+                    )
             return extracted
 
+        except LLMResponseError:
+            # Re-raise our custom response error
+            raise
         except Exception as e:
             last_error = e
             if log:
