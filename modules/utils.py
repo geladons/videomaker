@@ -43,6 +43,27 @@ def ensure_dir(path: str) -> None:
     os.makedirs(path, exist_ok=True)
 
 
+def get_wav_duration(file_path: str) -> float:
+    """
+    Get duration of a WAV file in seconds.
+    Uses wave module for standard PCM and provides a fallback/safeguard.
+    """
+    import contextlib
+    import wave
+
+    if not os.path.exists(file_path):
+        return 0.0
+    try:
+        with contextlib.closing(wave.open(file_path, "r")) as f:
+            frames = f.getnframes()
+            rate = f.getframerate()
+            duration = frames / float(rate)
+            return duration
+    except Exception:
+        # Fallback for non-standard WAVs if needed or just return 0
+        return 0.0
+
+
 async def run_command(
     cmd: List[str],
     log: LogFn,

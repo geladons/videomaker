@@ -85,8 +85,15 @@ def _build_scene_command(
     else:
         video_map = current_label
 
-    inputs.extend(["-i", voiceover])
-    audio_index = input_offset
+    if voiceover and os.path.exists(voiceover):
+        inputs.extend(["-i", voiceover])
+        audio_source = f"{input_offset}:a"
+    else:
+        # Fallback to silent audio if voiceover is missing
+        inputs.extend(["-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100"])
+        audio_source = f"{input_offset}:a"
+    
+    input_offset += 1
 
     filter_complex = ";".join(filters)
     cmd = [
@@ -98,7 +105,7 @@ def _build_scene_command(
         "-map",
         video_map,
         "-map",
-        f"{audio_index}:a",
+        audio_source,
         "-af",
         f"apad=pad_dur={duration}",
         "-t",
@@ -117,7 +124,7 @@ def _build_scene_command(
 async def compose_video(
     scenes: List[Dict[str, float]],
     assets: List[Dict[str, Optional[str]]],
-    voiceovers: List[str],
+    voiceovers: List[Optional[str]],
     output_path: str,
     workspace: str,
     log: LogFn,
@@ -139,7 +146,7 @@ async def compose_video(
         duration = float(scene.get("duration", 4))
         bg_video = assets[idx - 1].get("video") if idx - 1 < len(assets) else None
         overlay = assets[idx - 1].get("image") if idx - 1 < len(assets) else None
-        voice = voiceovers[idx - 1]
+        voice = voiceovers[idx - 1] if idx - 1 < len(voiceovers) else None
         overlay_text = scene.get("overlay_text") if not overlay else None
         font_name = str(video_settings.get("font_name", DEFAULT_VIDEO["font_name"]))
         font_size = int(video_settings.get("font_size", DEFAULT_VIDEO["font_size"]))

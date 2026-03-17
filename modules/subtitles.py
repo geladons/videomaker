@@ -86,7 +86,7 @@ def _words_to_karaoke(words: List[Tuple[str, float, float]]) -> str:
 
 
 async def generate_ass(
-    wav_files: List[str],
+    wav_files: List[Optional[str]],
     offsets: List[float],
     out_path: str,
     log: LogFn,
@@ -102,6 +102,10 @@ async def generate_ass(
     all_segments = []
 
     for wav, offset in zip(wav_files, offsets):
+        if not wav or not os.path.exists(wav):
+            await log("warn", f"Skipping subtitles for missing voiceover segment at offset {offset}")
+            continue
+
         await log("info", f"Transcribing subtitles for {os.path.basename(wav)}")
         segments, _info = model.transcribe(
             wav,

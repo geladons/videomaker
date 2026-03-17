@@ -39,6 +39,8 @@ from config import (
 )
 from database import add_log, create_task, get_setting, update_task_status
 from modules import compositor, llm, scraper, subtitles, tts_engine, vision
+from modules.utils import get_wav_duration
+
 
 LogFn = Callable[[str, str], Awaitable[None]]
 
@@ -399,6 +401,22 @@ class Orchestrator:
                 coqui_speaker=cfg["tts"]["coqui_speaker"],
                 progress_fn=tts_progress,
             )
+
+            # Adjust durations based on actual audio length
+            for i, (scene, voice_file) in enumerate(zip(scenes, voiceovers)):
+                if voice_file and os.path.exists(voice_file):
+                    audio_dur = get_wav_duration(voice_file)
+                    if audio_dur > 0:
+                        # Extend scene duration if audio is longer, add 0.3s padding
+                        target_dur = round(audio_dur + 0.3, 2)
+                        current_dur = float(scene.get("duration", 0))
+                        if target_dur > current_dur:
+                            await self._log(
+                                task_id,
+                                "info",
+                                f"Extending scene {i+1} duration from {current_dur:.2f}s to {target_dur:.2f}s (audio={audio_dur:.2f}s)",
+                            )
+                            scene["duration"] = target_dur
 
             await self._set_progress(task_id, 85)
             subtitle_path = None
