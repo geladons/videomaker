@@ -83,6 +83,7 @@ class TestDynamicTimeline(unittest.IsolatedAsyncioTestCase):
         # Scene 2 should be exactly 3.3s because we forced audio-driven durations
         self.assertEqual(final_scenes[1]["duration"], 3.3)
 
+    @patch('orchestrator.llm.plan_timeline')
     @patch('orchestrator.llm.generate_voiceover')
     @patch('orchestrator.tts_engine.generate_voiceovers')
     @patch('orchestrator.get_wav_duration')

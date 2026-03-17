@@ -44,13 +44,13 @@ def _build_scene_command(
         inputs.extend(["-stream_loop", "-1", "-i", bg_video])
         bg_filter = (
             f"[0:v]scale={width}:{height}:force_original_aspect_ratio=increase,"
-            f"crop={width}:{height},fps={fps},format=yuv420p[bg]"
+            f"crop={width}:{height},fps={fps},setsar=1,format=yuv420p,settb=1/AVTB,pts=STARTPTS[bg]"
         )
         filter_inputs = "[bg]"
         input_offset = 1
     else:
         inputs.extend(["-f", "lavfi", "-i", f"color=c=0x0f172a:s={resolution}:r={fps}"])
-        bg_filter = "[0:v]format=yuv420p,noise=alls=8:allf=t+u[bg]"
+        bg_filter = "[0:v]format=yuv420p,setsar=1,settb=1/AVTB,pts=STARTPTS,noise=alls=8:allf=t+u[bg]"
         filter_inputs = "[bg]"
         input_offset = 1
 
@@ -117,6 +117,10 @@ def _build_scene_command(
         "veryfast",
         "-c:a",
         "aac",
+        "-ar",
+        "44100",
+        "-ac",
+        "2",
         out_path,
     ]
     return cmd
@@ -209,11 +213,9 @@ async def compose_video(
         "-i",
         concat_list,
         "-c:v",
-        "libx264",
-        "-preset",
-        "veryfast",
+        "copy",
         "-c:a",
-        "aac",
+        "copy",
         concat_out,
     ]
     await log("info", "Concatenating scenes")
