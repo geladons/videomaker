@@ -22,7 +22,6 @@ SCRAPER_URLS = {
     "archive_search": "https://archive.org/advancedsearch.php",
     "archive_metadata": "https://archive.org/metadata/",
     "archive_download": "https://archive.org/download/",
-    "duckduckgo": "https://html.duckduckgo.com/html/",
     "wikimedia": "https://commons.wikimedia.org/w/api.php",
 }
 

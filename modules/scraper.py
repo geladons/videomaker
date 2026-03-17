@@ -8,6 +8,7 @@ from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 import httpx
 from bs4 import BeautifulSoup
+from duckduckgo_search import DDGS
 
 from config import (
     DEFAULT_DIRS,
@@ -75,13 +76,13 @@ async def download_cc_video(
     if sleep_max < sleep_min:
         sleep_max = sleep_min
     delay_sec = float(settings.get("request_delay_sec", 0.0))
-    match_filter = "license~='Creative Commons'"
     safe_query = _limit_query(query)
     base_cmd = [
         "yt-dlp",
         f"ytsearch{search_count}:{safe_query} creative commons",
         "--max-downloads",
         "1",
+        "--no-progress",
         "--format",
         "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/b",
         "-o",
@@ -93,10 +94,9 @@ async def download_cc_video(
         base_cmd += ["--max-sleep-interval", str(sleep_max)]
     if delay_sec > 0:
         await asyncio.sleep(delay_sec)
-    
+
     start_time = time.time()
-    code = await run_command(base_cmd + ["--match-filter", match_filter], log=log)
-    
+    code = await run_command(base_cmd, log=log)
     # Check if a file was actually downloaded despite potential exit code 1 (warnings)
     latest = await _latest_file(out_dir, [".mp4", ".mkv", ".webm"], min_mtime=start_time)
     
@@ -134,7 +134,6 @@ async def download_cc_audio(
     if sleep_max < sleep_min:
         sleep_max = sleep_min
     delay_sec = float(settings.get("request_delay_sec", 0.0))
-    match_filter = "license~='Creative Commons'"
 
     # Clean query - remove extra words
     clean_query = query
@@ -150,6 +149,7 @@ async def download_cc_audio(
         f"ytsearch{search_count}:{safe_query} creative commons",
         "--max-downloads",
         "1",
+        "--no-progress",
         "-x",
         "--audio-format",
         "mp3",
@@ -167,7 +167,7 @@ async def download_cc_audio(
 
     await log("info", f"Downloading audio: yt-dlp {safe_query} creative commons")
     start_time = time.time()
-    code = await run_command(base_cmd + ["--match-filter", match_filter], log=log)
+    code = await run_command(base_cmd, log=log)
     
     # Check if a file was actually downloaded despite potential exit code 1 (warnings)
     latest = await _latest_file(out_dir, [".mp3", ".m4a", ".wav", ".ogg"], min_mtime=start_time)
@@ -292,6 +292,7 @@ async def _download_audio_fallback(
             f"ytsearch3:{simple_query}",
             "--max-downloads",
             "1",
+            "--no-progress",
             "-x",
             "--audio-format",
             "mp3",
@@ -326,6 +327,18 @@ async def _download_audio_fallback(
     except Exception as e:
         await log("warn", f"Audio fallback failed: {e}")
         return None
+
+
+async def search_duckduckgo_images(query: str, limit: int = 3) -> List[str]:
+    """Search for images using DuckDuckGo library with thread-safe execution."""
+    def _search():
+        with DDGS() as ddgs:
+            return [r["image"] for r in ddgs.images(query, max_results=limit)]
+
+    try:
+        return await asyncio.to_thread(_search)
+    except Exception:
+        return []
 
 
 async def search_wikimedia_images(query: str, limit: int = 3) -> List[str]:
@@ -580,10 +593,18 @@ async def gather_scene_assets(
             for q_idx, query in enumerate(unique_queries):
                 await log("info", f"Searching images for scene {idx} (attempt {q_idx+1}): {query}")
                 urls = []
+                # Try DuckDuckGo first (more results)
                 try:
-                    urls = await search_wikimedia_images(query, limit=2)
-                except httpx.HTTPError:
+                    urls = await search_duckduckgo_images(query, limit=2)
+                except Exception:
                     pass
+
+                # Fallback to Wikimedia
+                if not urls:
+                    try:
+                        urls = await search_wikimedia_images(query, limit=2)
+                    except httpx.HTTPError:
+                        pass
 
                 if urls:
 
@@ -616,7 +637,10 @@ async def gather_scene_assets(
         
     if not first_image and use_images:
         await log("warn", "NO images found for ANY scene. Attempting ultimate fallback search.")
-        urls = await search_wikimedia_images("nature", limit=1)
+        urls = await search_duckduckgo_images("nature", limit=1)
+        if not urls:
+            urls = await search_wikimedia_images("nature", limit=1)
+        
         if urls:
             target = os.path.join(image_dir, "ultimate_fallback.jpg")
             if await download_image(urls[0], target):
@@ -669,8 +693,8 @@ def _clean_query_for_video(query: str) -> str:
     if len(words) > 4:
         words = words[:4]
 
-    # Add CC tag for better results
-    cleaned = " ".join(words) + " CC"
+    # Add specialized tags for better search hits
+    cleaned = " ".join(words) + " no copyright gameplay loop"
 
     return cleaned
 

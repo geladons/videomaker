@@ -307,3 +307,77 @@ async def generate_voiceover(
         if log:
             await log("error", f"Voiceover generation failed: {exc}")
         return base_outline or "Brief scene."
+
+async def generate_search_queries(
+    scene: Dict[str, Any],
+    asset_type: str,
+    model: str,
+    options: Dict[str, Any],
+    api_url: str,
+    timeout: float,
+    request_delay: float = 0.5,
+    log: Optional[LogFn] = None,
+) -> List[str]:
+    """
+    Refine a descriptive visual query into 3-5 specific keywords for search.
+    This helps bypass search engine confusion with long sentences.
+    """
+    base_query = (
+        scene.get("visual_query")
+        or scene.get("voiceover")
+        or scene.get("overlay_text")
+        or ""
+    )
+    
+    prompt = (
+        "You are an expert in finding stock media. "
+        f"Convert this scene description into 3-5 specific, searchable keywords for {asset_type} search.\n"
+    )
+    if asset_type == "music":
+        prompt += "Focus on mood, genre, and instruments (e.g., 'uplifting, acoustic guitar, folk').\n"
+    else:
+        prompt += "Focus on concrete nouns and objects (e.g., 'modern office, businessman, typing').\n"
+    
+    prompt += (
+        "Return ONLY the keywords, separated by commas. No other text.\n\n"
+        f"Description: {base_query}"
+    )
+
+    payload: Dict[str, Any] = {
+        "model": model,
+        "prompt": prompt,
+        "stream": False,
+        "options": options,
+    }
+
+    try:
+        if request_delay > 0:
+            await asyncio.sleep(request_delay)
+            
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.post(f"{api_url}/api/generate", json=payload)
+            resp.raise_for_status()
+            data = resp.json()
+            
+        raw_text = data.get("response", "") if isinstance(data, dict) else ""
+        # Strip thinking/markdown
+        raw_text = re.sub(r"<think>.*?</think>", "", raw_text, flags=re.DOTALL).strip()
+        raw_text = re.sub(r"```.*?```", "", raw_text, flags=re.DOTALL).strip()
+        
+        # Split and clean
+        lines = [l.strip() for l in re.split(r"[,|\n]", raw_text) if l.strip()]
+        cleaned = [re.sub(r"^[\-\*\d\.\s]+", "", l).strip() for l in lines]
+        keywords = [k for k in cleaned if k][:5]
+        
+        if not keywords and base_query:
+            from modules.utils import clean_and_tokenize
+            keywords = clean_and_tokenize(base_query, max_words=4).split()
+
+        if log and keywords:
+            await log("info", f"Generated {asset_type} keywords: {', '.join(keywords)}")
+            
+        return keywords
+    except Exception as exc:
+        if log:
+            await log("warn", f"AI search query generation failed: {exc}")
+        return []

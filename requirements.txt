@@ -11,3 +11,4 @@ yt-dlp>=2025.01.15
 faster-whisper==1.0.3
 huggingface_hub==0.24.6
 json5==0.9.25
+duckduckgo-search==8.1.1

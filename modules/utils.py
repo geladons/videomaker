@@ -13,15 +13,12 @@ STOPWORDS = {
     "a", "an", "the", "of", "for", "and", "to", "in", "on", "with", "from",
     "about", "is", "are", "was", "were", "be", "been", "being", "have", "has",
     "had", "do", "does", "did", "but", "if", "or", "because", "as", "until",
-    "while", "at", "by", "for", "with", "about", "against", "between", "into",
-    "through", "during", "before", "after", "above", "below", "to", "from",
-    "up", "down", "in", "out", "on", "off", "over", "under", "again", "further",
-    "then", "once", "here", "there", "when", "where", "why", "how", "all", "any",
-    "both", "each", "few", "more", "most", "other", "some", "such", "no", "nor",
-    "not", "only", "own", "same", "so", "than", "too", "very", "s", "t", "can",
-    "will", "just", "don", "should", "now", "detailed", "explanation", "historical",
-    "impact", "overview", "summary", "description", "video", "about", "showing",
-    "screenshot", "image", "photo", "picture", "cinematic", "background"
+    "while", "at", "by", "against", "between", "into", "through", "during",
+    "before", "after", "above", "below", "up", "down", "out", "off", "over",
+    "under", "again", "further", "then", "once", "here", "there", "when",
+    "where", "why", "how", "all", "any", "both", "each", "few", "more", "most",
+    "other", "some", "such", "no", "nor", "not", "only", "own", "same", "so",
+    "than", "too", "very", "s", "t", "can", "will", "just", "don", "should", "now"
 }
 
 
