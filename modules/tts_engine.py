@@ -160,6 +160,9 @@ async def generate_voiceovers(
         if note:
             await log("info", note)
 
+        if not resolved_voice:
+            raise RuntimeError(f"No valid Piper voice model found for language: {language}")
+
         outputs: List[str] = []
         num_texts = len(valid_texts)
         for idx, text in enumerate(valid_texts, start=1):
@@ -237,7 +240,9 @@ async def _generate_coqui(
     if tts is None:
         await log("info", f"Loading Coqui TTS model: {model_name}")
         try:
-            tts = TTS(model_name=model_name, progress_bar=False, gpu=False)
+            tts = await asyncio.to_thread(
+                TTS, model_name=model_name, progress_bar=False, gpu=False
+            )
             _coqui_cache[model_name] = tts
         except Exception as exc:
             await log("error", f"Failed to load Coqui model {model_name}: {exc}")
@@ -293,7 +298,7 @@ def _resolve_voice(
     language: Optional[str],
     voice_path: Optional[str],
     voice_config: Optional[str],
-) -> Tuple[str, Optional[str], Optional[str]]:
+) -> Tuple[Optional[str], Optional[str], Optional[str]]:
     if voice_path and os.path.exists(voice_path):
         config = _pick_config(voice_path, voice_config)
         return voice_path, config, f"Using custom voice model: {voice_path}"
@@ -321,7 +326,7 @@ def _resolve_voice(
             note or f"Using default voice: {PIPER_VOICE_PATH}",
         )
 
-    return voice_path or PIPER_VOICE_PATH, voice_config or PIPER_VOICE_CONFIG, note
+    return None, None, note or "No valid Piper voice models found"
 
 
 def _pick_config(model_path: str, config_path: Optional[str]) -> Optional[str]:
