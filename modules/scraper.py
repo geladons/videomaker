@@ -12,8 +12,7 @@ from duckduckgo_search import DDGS
 
 from config import (
     DEFAULT_DIRS,
-    DEFAULT_OLLAMA_MODEL,
-    DEFAULT_OLLAMA_PARAMS,
+    OLLAMA_SETTINGS,
     OLLAMA_API_URL,
     SCRAPER_URLS,
 )
@@ -390,7 +389,7 @@ async def generate_ai_search_queries(
     asset_type: str,
     log: LogFn,
     api_url: str = OLLAMA_API_URL,
-    model: str = DEFAULT_OLLAMA_MODEL,
+    model: str = OLLAMA_SETTINGS["default"]["model"],
     options: Optional[Dict[str, Any]] = None,
     timeout: float = 60.0,
 ) -> List[str]:
@@ -400,7 +399,7 @@ async def generate_ai_search_queries(
     """
     from modules import llm
 
-    merged_options = {**DEFAULT_OLLAMA_PARAMS, **(options or {})}
+    merged_options = {**OLLAMA_SETTINGS["default"]["params"], **(options or {})}
     merged_options["num_predict"] = min(merged_options.get("num_predict", 256), 256)
 
     try:
@@ -528,27 +527,12 @@ async def gather_scene_assets(
 
         # Video download - try multiple queries for better hit rate
         if use_stock_video:
-            base_query = scene.get("visual_query", "cinematic background")
-            
-            # 1. Primary query
-            video_query = _clean_query_for_video(base_query)
-            # 2. Broader query (fewer words)
-            words = video_query.split()
-            broad_query = " ".join(words[:2]) + " CC" if len(words) > 2 else video_query
-            # 3. Fallback topic query
-            fallback_q = _clean_query_for_video(fallback_topic) if fallback_topic else "nature CC"
-
-            queries = [video_query, broad_query, fallback_q]
-            # Remove duplicates while preserving order
-            seen_q = set()
-            unique_queries = []
-            for q in queries:
-                if q not in seen_q:
-                    unique_queries.append(q)
-                    seen_q.add(q)
+            queries = await generate_ai_search_queries(scene, "video", log)
+            if not queries:
+                queries = _alternate_queries(scene.get("visual_query", "cinematic background"), fallback_topic=fallback_topic)
 
             video_path = None
-            for q_idx, query in enumerate(unique_queries):
+            for q_idx, query in enumerate(queries):
                 await log("info", f"Searching CC video for scene {idx} (attempt {q_idx+1}): {query}")
                 try:
                     video_path = await download_cc_video(
@@ -571,26 +555,12 @@ async def gather_scene_assets(
 
         # Image download
         if use_images:
-            base_query = scene.get("visual_query", "abstract background")
-
-            # Clean up query for images
-            image_query = _clean_query_for_image(base_query)
-            # Broader query
-            words = image_query.split()
-            broad_query = " ".join(words[:1]) if len(words) > 1 else image_query
-            # Fallback
-            fallback_q = _clean_query_for_image(fallback_topic) if fallback_topic else "abstract"
-
-            queries = [image_query, broad_query, fallback_q]
-            seen_q = set()
-            unique_queries = []
-            for q in queries:
-                if q not in seen_q:
-                    unique_queries.append(q)
-                    seen_q.add(q)
+            queries = await generate_ai_search_queries(scene, "image", log)
+            if not queries:
+                queries = _alternate_queries(scene.get("visual_query", "abstract background"), fallback_topic=fallback_topic)
 
             image_path = None
-            for q_idx, query in enumerate(unique_queries):
+            for q_idx, query in enumerate(queries):
                 await log("info", f"Searching images for scene {idx} (attempt {q_idx+1}): {query}")
                 urls = []
                 # Try DuckDuckGo first (more results)
@@ -660,61 +630,3 @@ async def gather_scene_assets(
     return assets
 
 
-def _clean_query_for_video(query: str) -> str:
-    """
-    Clean up query for video search - short, video-focused, with CC tag.
-    """
-    if not query:
-        return "minecraft gameplay"
-
-    # Remove common prefixes
-    for prefix in [
-        "A shot of ",
-        "A montage of ",
-        "A comparison shot of ",
-        "A news headline of ",
-        "image of ",
-        "screenshot of ",
-        "photo of ",
-        "picture of ",
-    ]:
-        if query.lower().startswith(prefix.lower()):
-            query = query[len(prefix) :]
-            break
-
-    # Remove common suffixes
-    for suffix in [" footage", " gameplay", " video", " clip"]:
-        if query.lower().endswith(suffix.lower()):
-            query = query[: -len(suffix)]
-            break
-
-    # Clean up and limit to 4 words
-    words = query.split()
-    if len(words) > 4:
-        words = words[:4]
-
-    # Add specialized tags for better search hits
-    cleaned = " ".join(words) + " no copyright gameplay loop"
-
-    return cleaned
-
-
-def _clean_query_for_image(query: str) -> str:
-    """
-    Clean up query for image search - short, image-focused.
-    """
-    if not query:
-        return "abstract"
-
-    # Remove video-related terms
-    for suffix in [" footage", " gameplay", " video", " clip"]:
-        if query.lower().endswith(suffix.lower()):
-            query = query[: -len(suffix)]
-            break
-
-    # Clean up and limit to 3 words
-    words = query.split()
-    if len(words) > 3:
-        words = words[:3]
-
-    return " ".join(words)

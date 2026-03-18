@@ -12,27 +12,11 @@ from config import (
     DEFAULT_COQUI_MODEL,
     DEFAULT_COQUI_SPEAKER,
     DEFAULT_DIRS,
-    DEFAULT_OLLAMA_HELPER_MODEL,
-    DEFAULT_OLLAMA_HELPER_PARAMS,
-    DEFAULT_OLLAMA_HELPER_THINK,
-    DEFAULT_OLLAMA_HELPER_TIMEOUT,
-    DEFAULT_OLLAMA_MODEL,
-    DEFAULT_OLLAMA_PARAMS,
-    DEFAULT_OLLAMA_PLANNER_MODEL,
-    DEFAULT_OLLAMA_PLANNER_PARAMS,
-    DEFAULT_OLLAMA_PLANNER_THINK,
-    DEFAULT_OLLAMA_PLANNER_TIMEOUT,
-    DEFAULT_OLLAMA_REQUEST_DELAY,
-    DEFAULT_OLLAMA_VISION_ENABLED,
-    DEFAULT_OLLAMA_VISION_MODEL,
-    DEFAULT_OLLAMA_VISION_PARAMS,
-    DEFAULT_OLLAMA_VISION_THINK,
-    DEFAULT_OLLAMA_VISION_TIMEOUT,
     DEFAULT_SCRAPER,
-    DEFAULT_TTS_ENGINE,
     DEFAULT_VIDEO,
+    OLLAMA_SETTINGS,
+    DEFAULT_TTS_ENGINE,
     DEFAULT_VOICEOVER_WPS,
-    LLM_DEFAULT_TIMEOUT,
     OLLAMA_API_URL,
     OUTPUT_DIR,
     WORKSPACE_DIR,
@@ -55,63 +39,8 @@ class Orchestrator:
 
     async def _get_effective_settings(self) -> Dict[str, Any]:
         """Fetch all configuration with database overrides and config.py fallbacks."""
-        return {
-            "ollama_api_url": await get_setting("ollama_api_url", OLLAMA_API_URL),
-            "ollama_model": await get_setting("ollama_model", DEFAULT_OLLAMA_MODEL),
-            "ollama_params": await get_setting("ollama_params", DEFAULT_OLLAMA_PARAMS),
-            "ollama_timeout": await get_setting("ollama_timeout", LLM_DEFAULT_TIMEOUT),
-            "ollama_think": await get_setting("ollama_think", False),
-            "ollama_request_delay": await get_setting(
-                "ollama_request_delay", DEFAULT_OLLAMA_REQUEST_DELAY
-            ),
-            "planner": {
-                "model": await get_setting(
-                    "ollama_planner_model", DEFAULT_OLLAMA_PLANNER_MODEL
-                ),
-                "params": await get_setting(
-                    "ollama_planner_params", DEFAULT_OLLAMA_PLANNER_PARAMS
-                ),
-                "api_url": await get_setting("ollama_planner_api_url", OLLAMA_API_URL),
-                "timeout": await get_setting(
-                    "ollama_planner_timeout", DEFAULT_OLLAMA_PLANNER_TIMEOUT
-                ),
-                "think": await get_setting(
-                    "ollama_planner_think", DEFAULT_OLLAMA_PLANNER_THINK
-                ),
-            },
-            "helper": {
-                "api_url": await get_setting("ollama_helper_api_url", OLLAMA_API_URL),
-                "model": await get_setting(
-                    "ollama_helper_model", DEFAULT_OLLAMA_HELPER_MODEL
-                ),
-                "params": await get_setting(
-                    "ollama_helper_params", DEFAULT_OLLAMA_HELPER_PARAMS
-                ),
-                "timeout": await get_setting(
-                    "ollama_helper_timeout", DEFAULT_OLLAMA_HELPER_TIMEOUT
-                ),
-                "think": await get_setting(
-                    "ollama_helper_think", DEFAULT_OLLAMA_HELPER_THINK
-                ),
-            },
-            "vision": {
-                "api_url": await get_setting("ollama_vision_api_url", OLLAMA_API_URL),
-                "model": await get_setting(
-                    "ollama_vision_model", DEFAULT_OLLAMA_VISION_MODEL
-                ),
-                "params": await get_setting(
-                    "ollama_vision_params", DEFAULT_OLLAMA_VISION_PARAMS
-                ),
-                "timeout": await get_setting(
-                    "ollama_vision_timeout", DEFAULT_OLLAMA_VISION_TIMEOUT
-                ),
-                "think": await get_setting(
-                    "ollama_vision_think", DEFAULT_OLLAMA_VISION_THINK
-                ),
-                "enabled": await get_setting(
-                    "ollama_vision_enabled", DEFAULT_OLLAMA_VISION_ENABLED
-                ),
-            },
+        settings = {
+            "ollama_request_delay": await get_setting("ollama_request_delay", 0.8),
             "scraper": await get_setting("scraper_settings", DEFAULT_SCRAPER),
             "video": await get_setting("video_settings", DEFAULT_VIDEO),
             "tts": {
@@ -131,6 +60,19 @@ class Orchestrator:
                 "api_url": await get_setting("ai_query_api_url", OLLAMA_API_URL),
             },
         }
+        # Add all Ollama settings dynamically
+        for key, ollama_setting in OLLAMA_SETTINGS.items():
+            prefix = f"ollama_{key}_" if key != "default" else "ollama_"
+            settings[key] = {
+                "model": await get_setting(f"{prefix}model", ollama_setting["model"]),
+                "params": await get_setting(f"{prefix}params", ollama_setting["params"]),
+                "api_url": await get_setting(f"{prefix}api_url", OLLAMA_API_URL),
+                "timeout": await get_setting(f"{prefix}timeout", ollama_setting["timeout"]),
+                "think": await get_setting(f"{prefix}think", ollama_setting["think"]),
+            }
+            if key == "vision":
+                settings[key]["enabled"] = await get_setting(f"{prefix}enabled", ollama_setting["enabled"])
+        return settings
 
     async def start(self) -> None:
         if self.worker_task is None:
@@ -251,11 +193,11 @@ class Orchestrator:
                         scene,
                         language=options.get("language", "English"),
                         target_words=target_words,
-                        model=cfg["ollama_model"],
-                        options=cfg["ollama_params"],
-                        api_url=cfg["ollama_api_url"],
-                        timeout=float(cfg["ollama_timeout"]),
-                        think=bool(cfg["ollama_think"]),
+                        model=cfg["default"]["model"],
+                        options=cfg["default"]["params"],
+                        api_url=cfg["default"]["api_url"],
+                        timeout=float(cfg["default"]["timeout"]),
+                        think=bool(cfg["default"]["think"]),
                         add_greeting=bool(options.get("add_greeting", False)),
                         add_closing=bool(options.get("add_closing", False)),
                         is_first=idx == 1,

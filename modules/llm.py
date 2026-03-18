@@ -8,8 +8,7 @@ from typing import Any, Awaitable, Callable, Dict, List, Optional, Union
 import httpx
 
 from config import (
-    DEFAULT_OLLAMA_MODEL,
-    DEFAULT_OLLAMA_PARAMS,
+    OLLAMA_SETTINGS,
     LLM_DEFAULT_TIMEOUT,
     LLM_MAX_RETRIES,
     OLLAMA_API_URL,
@@ -154,8 +153,8 @@ async def plan_timeline(
     request_delay: float = 0.8,
     log: Optional[LogFn] = None,
 ) -> Dict[str, Any]:
-    model = model or DEFAULT_OLLAMA_MODEL
-    merged_options = {**DEFAULT_OLLAMA_PARAMS, **(options or {})}
+    model = model or OLLAMA_SETTINGS["default"]["model"]
+    merged_options = {**OLLAMA_SETTINGS["default"]["params"], **(options or {})}
 
     payload = _build_payload(
         prompt,

@@ -63,80 +63,69 @@ LANGUAGE_SPEAKERS = {
 
 # Ollama API Defaults
 OLLAMA_API_URL = os.environ.get("OLLAMA_API_URL", "http://localhost:11434")
-DEFAULT_OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen3.5:9b")
-OLLAMA_TIMEOUT = int(os.environ.get("OLLAMA_TIMEOUT", "180"))
-OLLAMA_THINK = os.environ.get("OLLAMA_THINK", "false").lower() in {
-    "1",
-    "true",
-    "yes",
-    "on",
-}
-
-DEFAULT_OLLAMA_PLANNER_MODEL = os.environ.get("OLLAMA_PLANNER_MODEL", "llama3.2:3b")
-DEFAULT_OLLAMA_PLANNER_TIMEOUT = int(os.environ.get("OLLAMA_PLANNER_TIMEOUT", "120"))
-DEFAULT_OLLAMA_PLANNER_THINK = os.environ.get(
-    "OLLAMA_PLANNER_THINK", "false"
-).lower() in {"1", "true", "yes", "on"}
-
-DEFAULT_OLLAMA_HELPER_MODEL = os.environ.get("OLLAMA_HELPER_MODEL", "qwen3.5:2b")
-DEFAULT_OLLAMA_HELPER_TIMEOUT = int(os.environ.get("OLLAMA_HELPER_TIMEOUT", "120"))
-DEFAULT_OLLAMA_HELPER_THINK = os.environ.get(
-    "OLLAMA_HELPER_THINK", "false"
-).lower() in {"1", "true", "yes", "on"}
-
-DEFAULT_OLLAMA_VISION_MODEL = os.environ.get("OLLAMA_VISION_MODEL", "qwen3-vl:2b")
-DEFAULT_OLLAMA_VISION_TIMEOUT = int(os.environ.get("OLLAMA_VISION_TIMEOUT", "120"))
-DEFAULT_OLLAMA_VISION_THINK = os.environ.get(
-    "OLLAMA_VISION_THINK", "false"
-).lower() in {"1", "true", "yes", "on"}
-DEFAULT_OLLAMA_VISION_ENABLED = os.environ.get(
-    "OLLAMA_VISION_ENABLED", "false"
-).lower() in {"1", "true", "yes", "on"}
-
 LLM_DEFAULT_TIMEOUT = 180.0
 LLM_MAX_RETRIES = 3
-
-DEFAULT_OLLAMA_PARAMS = {
-    "num_ctx": 4096,
-    "num_thread": 20,
-    "temperature": 0.7,
-    "top_k": 40,
-    "top_p": 0.9,
-    "repeat_penalty": 1.1,
-    "num_predict": 1024,
-}
-
-DEFAULT_OLLAMA_PLANNER_PARAMS = {
-    "num_ctx": 4096,
-    "num_thread": 20,
-    "temperature": 0.3,
-    "top_k": 40,
-    "top_p": 0.9,
-    "repeat_penalty": 1.05,
-    "num_predict": 512,
-}
-
-DEFAULT_OLLAMA_HELPER_PARAMS = {
-    "num_ctx": 4096,
-    "num_thread": 20,
-    "temperature": 0.2,
-    "top_k": 40,
-    "top_p": 0.9,
-    "repeat_penalty": 1.05,
-    "num_predict": 512,
-}
-
-DEFAULT_OLLAMA_VISION_PARAMS = {
-    "num_ctx": 4096,
-    "num_thread": 20,
-    "temperature": 0.2,
-    "top_k": 40,
-    "top_p": 0.9,
-    "repeat_penalty": 1.05,
-    "num_predict": 256,
-}
-
 DEFAULT_OLLAMA_REQUEST_DELAY = float(os.environ.get("OLLAMA_REQUEST_DELAY", "0.8"))
+
+OLLAMA_SETTINGS = {
+    "default": {
+        "model": os.environ.get("OLLAMA_MODEL", "qwen3.5:9b"),
+        "timeout": int(os.environ.get("OLLAMA_TIMEOUT", "180")),
+        "think": os.environ.get("OLLAMA_THINK", "false").lower() in {"1", "true", "yes", "on"},
+        "params": {
+            "num_ctx": 4096,
+            "num_thread": 20,
+            "temperature": 0.7,
+            "top_k": 40,
+            "top_p": 0.9,
+            "repeat_penalty": 1.1,
+            "num_predict": 1024,
+        }
+    },
+    "planner": {
+        "model": os.environ.get("OLLAMA_PLANNER_MODEL", "llama3.2:3b"),
+        "timeout": int(os.environ.get("OLLAMA_PLANNER_TIMEOUT", "120")),
+        "think": os.environ.get("OLLAMA_PLANNER_THINK", "false").lower() in {"1", "true", "yes", "on"},
+        "params": {
+            "num_ctx": 4096,
+            "num_thread": 20,
+            "temperature": 0.3,
+            "top_k": 40,
+            "top_p": 0.9,
+            "repeat_penalty": 1.05,
+            "num_predict": 512,
+        }
+    },
+    "helper": {
+        "model": os.environ.get("OLLAMA_HELPER_MODEL", "qwen3.5:2b"),
+        "timeout": int(os.environ.get("OLLAMA_HELPER_TIMEOUT", "120")),
+        "think": os.environ.get("OLLAMA_HELPER_THINK", "false").lower() in {"1", "true", "yes", "on"},
+        "params": {
+            "num_ctx": 4096,
+            "num_thread": 20,
+            "temperature": 0.2,
+            "top_k": 40,
+            "top_p": 0.9,
+            "repeat_penalty": 1.05,
+            "num_predict": 512,
+        }
+    },
+    "vision": {
+        "enabled": os.environ.get("OLLAMA_VISION_ENABLED", "false").lower() in {"1", "true", "yes", "on"},
+        "model": os.environ.get("OLLAMA_VISION_MODEL", "qwen3-vl:2b"),
+        "timeout": int(os.environ.get("OLLAMA_VISION_TIMEOUT", "120")),
+        "think": os.environ.get("OLLAMA_VISION_THINK", "false").lower() in {"1", "true", "yes", "on"},
+        "params": {
+            "num_ctx": 4096,
+            "num_thread": 20,
+            "temperature": 0.2,
+            "top_k": 40,
+            "top_p": 0.9,
+            "repeat_penalty": 1.05,
+            "num_predict": 256,
+        }
+    }
+}
 
 DEFAULT_VOICEOVER_WPS = float(os.environ.get("VOICEOVER_WORDS_PER_SEC", "2.0"))
 

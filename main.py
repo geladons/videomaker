@@ -14,22 +14,7 @@ from fastapi.templating import Jinja2Templates
 
 from config import (
     DEFAULT_DIRS,
-    DEFAULT_OLLAMA_MODEL,
-    DEFAULT_OLLAMA_PARAMS,
-    DEFAULT_OLLAMA_PLANNER_MODEL,
-    DEFAULT_OLLAMA_PLANNER_PARAMS,
-    DEFAULT_OLLAMA_PLANNER_THINK,
-    DEFAULT_OLLAMA_PLANNER_TIMEOUT,
-    DEFAULT_OLLAMA_HELPER_MODEL,
-    DEFAULT_OLLAMA_HELPER_PARAMS,
-    DEFAULT_OLLAMA_HELPER_THINK,
-    DEFAULT_OLLAMA_HELPER_TIMEOUT,
-    DEFAULT_OLLAMA_REQUEST_DELAY,
-    DEFAULT_OLLAMA_VISION_ENABLED,
-    DEFAULT_OLLAMA_VISION_MODEL,
-    DEFAULT_OLLAMA_VISION_PARAMS,
-    DEFAULT_OLLAMA_VISION_THINK,
-    DEFAULT_OLLAMA_VISION_TIMEOUT,
+    OLLAMA_SETTINGS,
     DEFAULT_PIPELINE,
     DEFAULT_SCRAPER,
     DEFAULT_VIDEO,
@@ -38,8 +23,6 @@ from config import (
     DEFAULT_COQUI_SPEAKER,
     DEFAULT_VOICEOVER_WPS,
     OLLAMA_API_URL,
-    OLLAMA_THINK,
-    OLLAMA_TIMEOUT,
     OUTPUT_DIR,
     SUPPORTED_LANGUAGES,
 )
@@ -100,30 +83,29 @@ orchestrator = Orchestrator(log_callback)
 async def on_startup() -> None:
     await init_db()
 
-    if await get_setting("ollama_api_url") is None:
-        await set_setting("ollama_api_url", OLLAMA_API_URL)
-    if await get_setting("ollama_model") is None:
-        await set_setting("ollama_model", DEFAULT_OLLAMA_MODEL)
-    if await get_setting("ollama_params") is None:
-        await set_setting("ollama_params", DEFAULT_OLLAMA_PARAMS)
-    if await get_setting("ollama_planner_api_url") is None:
-        await set_setting("ollama_planner_api_url", OLLAMA_API_URL)
-    if await get_setting("ollama_planner_model") is None:
-        await set_setting("ollama_planner_model", DEFAULT_OLLAMA_PLANNER_MODEL)
-    if await get_setting("ollama_planner_params") is None:
-        await set_setting("ollama_planner_params", DEFAULT_OLLAMA_PLANNER_PARAMS)
-    if await get_setting("ollama_planner_timeout") is None:
-        await set_setting("ollama_planner_timeout", DEFAULT_OLLAMA_PLANNER_TIMEOUT)
-    if await get_setting("ollama_planner_think") is None:
-        await set_setting("ollama_planner_think", DEFAULT_OLLAMA_PLANNER_THINK)
+    # Consolidate Ollama settings setup
+    for key, settings in OLLAMA_SETTINGS.items():
+        prefix = f"ollama_{key}_" if key != "default" else "ollama_"
+        if await get_setting(f"{prefix}model") is None:
+            await set_setting(f"{prefix}model", settings["model"])
+        if await get_setting(f"{prefix}params") is None:
+            await set_setting(f"{prefix}params", settings["params"])
+        if await get_setting(f"{prefix}timeout") is None:
+            await set_setting(f"{prefix}timeout", settings["timeout"])
+        if await get_setting(f"{prefix}think") is None:
+            await set_setting(f"{prefix}think", settings["think"])
+        # Special case for vision 'enabled' flag
+        if key == "vision" and await get_setting(f"{prefix}enabled") is None:
+            await set_setting(f"{prefix}enabled", settings["enabled"])
+        # API URL can be set per-service or fallback to global
+        if await get_setting(f"{prefix}api_url") is None:
+             await set_setting(f"{prefix}api_url", OLLAMA_API_URL)
+
+    # General settings
     if await get_setting("video_settings") is None:
         await set_setting("video_settings", DEFAULT_VIDEO)
     if await get_setting("supported_languages") is None:
         await set_setting("supported_languages", SUPPORTED_LANGUAGES)
-    if await get_setting("ollama_timeout") is None:
-        await set_setting("ollama_timeout", OLLAMA_TIMEOUT)
-    if await get_setting("ollama_think") is None:
-        await set_setting("ollama_think", OLLAMA_THINK)
     if await get_setting("pipeline_defaults") is None:
         await set_setting("pipeline_defaults", DEFAULT_PIPELINE)
     if await get_setting("voiceover_words_per_sec") is None:
@@ -134,34 +116,8 @@ async def on_startup() -> None:
         await set_setting("coqui_model", DEFAULT_COQUI_MODEL)
     if await get_setting("coqui_speaker") is None:
         await set_setting("coqui_speaker", DEFAULT_COQUI_SPEAKER)
-    if await get_setting("ollama_helper_api_url") is None:
-        await set_setting("ollama_helper_api_url", OLLAMA_API_URL)
-    if await get_setting("ollama_helper_model") is None:
-        await set_setting("ollama_helper_model", DEFAULT_OLLAMA_HELPER_MODEL)
-    if await get_setting("ollama_helper_params") is None:
-        await set_setting("ollama_helper_params", DEFAULT_OLLAMA_HELPER_PARAMS)
-    if await get_setting("ollama_helper_timeout") is None:
-        await set_setting("ollama_helper_timeout", DEFAULT_OLLAMA_HELPER_TIMEOUT)
-    if await get_setting("ollama_helper_think") is None:
-        await set_setting("ollama_helper_think", DEFAULT_OLLAMA_HELPER_THINK)
-
-    if await get_setting("ollama_request_delay") is None:
-        await set_setting("ollama_request_delay", DEFAULT_OLLAMA_REQUEST_DELAY)
     if await get_setting("scraper_settings") is None:
         await set_setting("scraper_settings", DEFAULT_SCRAPER)
-
-    if await get_setting("ollama_vision_api_url") is None:
-        await set_setting("ollama_vision_api_url", OLLAMA_API_URL)
-    if await get_setting("ollama_vision_model") is None:
-        await set_setting("ollama_vision_model", DEFAULT_OLLAMA_VISION_MODEL)
-    if await get_setting("ollama_vision_params") is None:
-        await set_setting("ollama_vision_params", DEFAULT_OLLAMA_VISION_PARAMS)
-    if await get_setting("ollama_vision_timeout") is None:
-        await set_setting("ollama_vision_timeout", DEFAULT_OLLAMA_VISION_TIMEOUT)
-    if await get_setting("ollama_vision_think") is None:
-        await set_setting("ollama_vision_think", DEFAULT_OLLAMA_VISION_THINK)
-    if await get_setting("ollama_vision_enabled") is None:
-        await set_setting("ollama_vision_enabled", DEFAULT_OLLAMA_VISION_ENABLED)
 
     await _ensure_valid_ollama_model()
     await orchestrator.start()
@@ -178,30 +134,17 @@ async def _ensure_valid_ollama_model() -> None:
         except httpx.HTTPError:
             return []
 
-    api_url = await get_setting("ollama_api_url", OLLAMA_API_URL)
-    planner_api_url = await get_setting("ollama_planner_api_url", OLLAMA_API_URL)
-    helper_api_url = await get_setting("ollama_helper_api_url", OLLAMA_API_URL)
-    vision_api_url = await get_setting("ollama_vision_api_url", OLLAMA_API_URL)
-
-    selected = await get_setting("ollama_model", DEFAULT_OLLAMA_MODEL)
-    planner_model = await get_setting("ollama_planner_model", DEFAULT_OLLAMA_PLANNER_MODEL)
-    helper_model = await get_setting("ollama_helper_model", DEFAULT_OLLAMA_HELPER_MODEL)
-    vision_model = await get_setting("ollama_vision_model", DEFAULT_OLLAMA_VISION_MODEL)
-
-    base_models = await _fetch_models(api_url)
-    planner_models = base_models if planner_api_url == api_url else await _fetch_models(planner_api_url)
-    helper_models = base_models if helper_api_url == api_url else await _fetch_models(helper_api_url)
-    vision_models = base_models if vision_api_url == api_url else await _fetch_models(vision_api_url)
-
-    if base_models and selected not in base_models:
-        await set_setting("ollama_model", base_models[0])
-    if planner_models and planner_model not in planner_models:
-        await set_setting("ollama_planner_model", planner_models[0])
-    if helper_models and helper_model not in helper_models:
-        await set_setting("ollama_helper_model", helper_models[0])
-    if vision_models and vision_model not in vision_models:
-        await set_setting("ollama_vision_model", vision_models[0])
-        await set_setting("ollama_vision_enabled", False)
+    for key, settings in OLLAMA_SETTINGS.items():
+        prefix = f"ollama_{key}_" if key != "default" else "ollama_"
+        api_url = await get_setting(f"{prefix}api_url", OLLAMA_API_URL)
+        selected_model = await get_setting(f"{prefix}model", settings["model"])
+        
+        available_models = await _fetch_models(api_url)
+        
+        if available_models and selected_model not in available_models:
+            await set_setting(f"{prefix}model", available_models[0])
+            if key == "vision":
+                await set_setting(f"{prefix}enabled", False)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -326,28 +269,18 @@ async def api_settings() -> JSONResponse:
 
 @app.post("/api/settings")
 async def api_settings_update(payload: Dict[str, Any]) -> JSONResponse:
-    await set_setting("ollama_api_url", payload.get("ollama_api_url", OLLAMA_API_URL))
-    await set_setting("ollama_model", payload.get("ollama_model", DEFAULT_OLLAMA_MODEL))
-    await set_setting("ollama_params", payload.get("ollama_params", DEFAULT_OLLAMA_PARAMS))
-    await set_setting("ollama_timeout", payload.get("ollama_timeout", OLLAMA_TIMEOUT))
-    await set_setting("ollama_request_delay", payload.get("ollama_request_delay", DEFAULT_OLLAMA_REQUEST_DELAY))
-    await set_setting("ollama_think", payload.get("ollama_think", OLLAMA_THINK))
-    await set_setting("ollama_planner_api_url", payload.get("ollama_planner_api_url", OLLAMA_API_URL))
-    await set_setting("ollama_planner_model", payload.get("ollama_planner_model", DEFAULT_OLLAMA_PLANNER_MODEL))
-    await set_setting("ollama_planner_params", payload.get("ollama_planner_params", DEFAULT_OLLAMA_PLANNER_PARAMS))
-    await set_setting("ollama_planner_timeout", payload.get("ollama_planner_timeout", DEFAULT_OLLAMA_PLANNER_TIMEOUT))
-    await set_setting("ollama_planner_think", payload.get("ollama_planner_think", DEFAULT_OLLAMA_PLANNER_THINK))
-    await set_setting("ollama_helper_api_url", payload.get("ollama_helper_api_url", OLLAMA_API_URL))
-    await set_setting("ollama_helper_model", payload.get("ollama_helper_model", DEFAULT_OLLAMA_HELPER_MODEL))
-    await set_setting("ollama_helper_params", payload.get("ollama_helper_params", DEFAULT_OLLAMA_HELPER_PARAMS))
-    await set_setting("ollama_helper_timeout", payload.get("ollama_helper_timeout", DEFAULT_OLLAMA_HELPER_TIMEOUT))
-    await set_setting("ollama_helper_think", payload.get("ollama_helper_think", DEFAULT_OLLAMA_HELPER_THINK))
-    await set_setting("ollama_vision_api_url", payload.get("ollama_vision_api_url", OLLAMA_API_URL))
-    await set_setting("ollama_vision_model", payload.get("ollama_vision_model", DEFAULT_OLLAMA_VISION_MODEL))
-    await set_setting("ollama_vision_params", payload.get("ollama_vision_params", DEFAULT_OLLAMA_VISION_PARAMS))
-    await set_setting("ollama_vision_timeout", payload.get("ollama_vision_timeout", DEFAULT_OLLAMA_VISION_TIMEOUT))
-    await set_setting("ollama_vision_think", payload.get("ollama_vision_think", DEFAULT_OLLAMA_VISION_THINK))
-    await set_setting("ollama_vision_enabled", payload.get("ollama_vision_enabled", DEFAULT_OLLAMA_VISION_ENABLED))
+    # Loop through consolidated Ollama settings
+    for key, settings in OLLAMA_SETTINGS.items():
+        prefix = f"ollama_{key}_" if key != "default" else "ollama_"
+        await set_setting(f"{prefix}api_url", payload.get(f"{prefix}api_url", OLLAMA_API_URL))
+        await set_setting(f"{prefix}model", payload.get(f"{prefix}model", settings["model"]))
+        await set_setting(f"{prefix}params", payload.get(f"{prefix}params", settings["params"]))
+        await set_setting(f"{prefix}timeout", payload.get(f"{prefix}timeout", settings["timeout"]))
+        await set_setting(f"{prefix}think", payload.get(f"{prefix}think", settings["think"]))
+        if key == "vision":
+            await set_setting(f"{prefix}enabled", payload.get(f"{prefix}enabled", settings["enabled"]))
+
+    # General settings
     await set_setting("video_settings", payload.get("video_settings", DEFAULT_VIDEO))
     await set_setting("voiceover_words_per_sec", payload.get("voiceover_words_per_sec", DEFAULT_VOICEOVER_WPS))
     await set_setting("tts_engine", payload.get("tts_engine", DEFAULT_TTS_ENGINE))

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 import tempfile
-from typing import Awaitable, Callable, Dict, List, Optional
+from typing import Awaitable, Callable, Dict, List, Optional, Tuple
 
 from config import DEFAULT_VIDEO
 from modules.utils import ensure_dir, get_wav_duration, run_command
@@ -21,38 +21,30 @@ def _escape_ffmpeg_path(path: str) -> str:
     Escapes a path for use in FFmpeg filters (e.g., drawtext textfile, ass).
     FFmpeg filtergraph parser requires escaping of colons and backslashes.
     """
-    return path.replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")
+    return path.replace("", "").replace(":", "\:").replace("'", "'")
 
 
-def _build_scene_command(
-    duration: float,
+def _build_video_filters(
+    width: int,
+    height: int,
+    fps: int,
     bg_video: Optional[str],
     overlay_image: Optional[str],
     text_file: Optional[str],
-    voiceover: str,
-    out_path: str,
-    resolution: str,
-    fps: int,
+    duration: float,
     font_name: str,
     font_size: int,
-) -> List[str]:
-    width, height = resolution.split("x")
-    inputs = []
+    input_offset: int,
+) -> Tuple[str, str]:
     filters = []
-
+    
     if bg_video:
-        inputs.extend(["-stream_loop", "-1", "-i", bg_video])
         bg_filter = (
             f"[0:v]scale={width}:{height}:force_original_aspect_ratio=increase,"
             f"crop={width}:{height},fps={fps},setsar=1,format=yuv420p,settb=1/AVTB,pts=STARTPTS[bg]"
         )
-        filter_inputs = "[bg]"
-        input_offset = 1
     else:
-        inputs.extend(["-f", "lavfi", "-i", f"color=c=0x0f172a:s={resolution}:r={fps}"])
         bg_filter = "[0:v]format=yuv420p,setsar=1,settb=1/AVTB,pts=STARTPTS,noise=alls=8:allf=t+u[bg]"
-        filter_inputs = "[bg]"
-        input_offset = 1
 
     filters.append(bg_filter)
     current_label = "[bg]"
@@ -71,32 +63,73 @@ def _build_scene_command(
     if overlay_image:
         fade_dur = min(0.5, max(0.1, duration * 0.2))
         fade_out_start = max(0.0, duration - fade_dur)
-        inputs.extend(["-i", overlay_image])
-        img_index = input_offset
         overlay = (
-            f"[{img_index}:v]scale=iw*0.8:ih*0.8:force_original_aspect_ratio=decrease,"
+            f"[{input_offset}:v]scale=iw*0.8:ih*0.8:force_original_aspect_ratio=decrease,"
             f"format=rgba,fade=t=in:st=0:d={fade_dur}:alpha=1,"
             f"fade=t=out:st={fade_out_start}:d={fade_dur}:alpha=1[img];"
             f"{current_label}[img]overlay=(W-w)/2:(H-h)/2:enable='between(t,0,{duration})'[vout]"
         )
         filters.append(overlay)
         video_map = "[vout]"
-        input_offset += 1
     else:
         video_map = current_label
+        
+    return ";".join(filters), video_map
 
-    # Audio source and padding
+
+def _build_ffmpeg_inputs(
+    bg_video: Optional[str],
+    overlay_image: Optional[str],
+    voiceover: str,
+    resolution: str,
+    fps: int,
+    duration: float,
+) -> Tuple[List[str], str, int]:
+    inputs = []
+    
+    if bg_video:
+        inputs.extend(["-stream_loop", "-1", "-i", bg_video])
+    else:
+        inputs.extend(["-f", "lavfi", "-i", f"color=c=0x0f172a:s={resolution}:r={fps}"])
+
+    input_offset = 1
+
+    if overlay_image:
+        inputs.extend(["-i", overlay_image])
+        input_offset += 1
+
     if voiceover and os.path.exists(voiceover):
         inputs.extend(["-i", voiceover])
-        audio_source = f"{input_offset}:a"
+        audio_source = f"{input_offset-1}:a"
     else:
-        # Fallback to silent audio if voiceover is missing
         inputs.extend(["-f", "lavfi", "-i", f"anullsrc=channel_layout=stereo:sample_rate=44100:d={duration}"])
-        audio_source = f"{input_offset}:a"
-    
-    input_offset += 1
+        audio_source = f"{input_offset-1}:a"
+        
+    return inputs, audio_source, input_offset
 
-    filter_complex = ";".join(filters)
+
+def _build_scene_command(
+    duration: float,
+    bg_video: Optional[str],
+    overlay_image: Optional[str],
+    text_file: Optional[str],
+    voiceover: str,
+    out_path: str,
+    resolution: str,
+    fps: int,
+    font_name: str,
+    font_size: int,
+) -> List[str]:
+    width, height = map(int, resolution.split("x"))
+    
+    inputs, audio_source, input_offset = _build_ffmpeg_inputs(
+        bg_video, overlay_image, voiceover, resolution, fps, duration
+    )
+    
+    filter_complex, video_map = _build_video_filters(
+        width, height, fps, bg_video, overlay_image, text_file, duration, font_name, font_size, input_offset - 1
+    )
+
     cmd = [
         "ffmpeg",
         "-y",
@@ -108,7 +141,7 @@ def _build_scene_command(
         "-map",
         audio_source,
         "-af",
-        "apad",  # Pad with silence if audio is shorter than -t
+        "apad",
         "-t",
         str(duration),
         "-c:v",

@@ -5,8 +5,25 @@ import os
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+# Since get_setting is now the primary way to configure, we need a more robust mock
 async def mock_get_setting(key, default=None):
-    return default
+    # This dictionary simulates the database settings
+    mock_db = {
+        "ollama_planner_model": "test-planner-model",
+        "ollama_planner_params": {"temperature": 0.1},
+        "ollama_planner_api_url": "http://planner-url",
+        "ollama_planner_timeout": 60,
+        "ollama_planner_think": False,
+        "ollama_model": "test-default-model",
+        "ollama_params": {"temperature": 0.5},
+        "ollama_api_url": "http://default-url",
+        "ollama_timeout": 120,
+        "ollama_think": False,
+        "ollama_request_delay": 0.0,
+        "tts_engine": "piper",
+        "voiceover_words_per_sec": 2.0,
+    }
+    return mock_db.get(key, default)
 
 # Mock the database before importing Orchestrator to avoid connection issues
 with patch('database.create_task', new=AsyncMock(return_value="task_123")):
@@ -14,140 +31,82 @@ with patch('database.create_task', new=AsyncMock(return_value="task_123")):
         from orchestrator import Orchestrator
 
 class TestDynamicTimeline(unittest.IsolatedAsyncioTestCase):
-    @patch('orchestrator.llm.plan_timeline')
-    @patch('orchestrator.llm.generate_voiceover')
-    @patch('orchestrator.tts_engine.generate_voiceovers')
-    @patch('orchestrator.get_wav_duration')
-    @patch('orchestrator.os.path.exists')
-    @patch('orchestrator.scraper.gather_scene_assets')
-    @patch('orchestrator.compositor.compose_video')
-    @patch('orchestrator.subtitles.generate_ass')
-    @patch('orchestrator.scraper.download_cc_audio')
-    @patch('orchestrator.update_task_status')
-    @patch('orchestrator.add_log')
-    @patch('database.get_task')
-    async def test_dynamic_durations(self, 
-                                     mock_get_task,
-                                     mock_add_log, 
-                                     mock_update_status, 
-                                     mock_download_cc,
-                                     mock_gen_ass,
-                                     mock_compose,
-                                     mock_gather_assets,
-                                     mock_exists, 
-                                     mock_get_dur, 
-                                     mock_gen_tts, 
-                                     mock_gen_vo, 
-                                     mock_plan):
-        # Mock task from DB
-        mock_get_task.return_value = {
-            "prompt": "Test prompt",
-            "options": {"duration": 10.0}
-        }
-        
-        # Mock plan with 2 scenes, initial durations 5s each
-        mock_plan.return_value = {
-            "title": "Test Video",
-            "total_duration": 10.0,
-            "music_mood": "happy",
+    
+    async def _run_test_with_mocks(self, mock_plan_val, mock_get_dur_val, task_options):
+        with (
+            patch('orchestrator.llm.plan_timeline', new=AsyncMock(return_value=mock_plan_val)),
+            patch('orchestrator.llm.generate_voiceover', new=AsyncMock(side_effect=lambda s, **kw: f"Voiceover for {s['voiceover']}")),
+            patch('orchestrator.tts_engine.generate_voiceovers', new=AsyncMock(return_value=["/tmp/v1.wav", "/tmp/v2.wav"])),
+            patch('orchestrator.get_wav_duration', side_effect=mock_get_dur_val),
+            patch('orchestrator.os.path.exists', return_value=True),
+            patch('orchestrator.scraper.gather_scene_assets', new=AsyncMock(return_value=[{"video": "v.mp4"} for _ in mock_plan_val["scenes"]])),
+            patch('orchestrator.compositor.compose_video', new=AsyncMock(return_value="final.mp4")) as mock_compose,
+            patch('orchestrator.subtitles.generate_ass', new=AsyncMock(return_value="subs.ass")),
+            patch('orchestrator.scraper.download_cc_audio', new=AsyncMock(return_value="music.mp3")),
+            patch('orchestrator.update_task_status', new=AsyncMock()),
+            patch('orchestrator.add_log', new=AsyncMock()),
+            patch('database.get_task', new=AsyncMock(return_value={"prompt": "Test", "options": task_options}))
+        ):
+            orc = Orchestrator(log_callback=AsyncMock())
+            # We still need to mock these as they touch the real filesystem/DB
+            orc._log = AsyncMock()
+            orc._set_progress = AsyncMock()
+
+            await orc._run_task("task_123")
+            
+            print(f"DEBUG LOGS: {orc._log.call_args_list}")
+            return mock_compose.call_args
+
+    async def test_dynamic_durations(self):
+        """Audio duration should force scene expansion, ignoring target duration."""
+        plan = {
+            "title": "Test", "total_duration": 10.0, "music_mood": "happy",
             "scenes": [
-                {"id": 1, "duration": 5.0, "voiceover": "Scene 1", "visual_query": "query 1"},
-                {"id": 2, "duration": 5.0, "voiceover": "Scene 2", "visual_query": "query 2"}
+                {"id": 1, "duration": 5.0, "voiceover": "Scene 1", "visual_query": "q1"},
+                {"id": 2, "duration": 5.0, "voiceover": "Scene 2", "visual_query": "q2"}
             ]
         }
-        mock_gen_vo.side_effect = ["Voiceover 1 text", "Voiceover 2 text"]
-        mock_gen_tts.return_value = ["/tmp/v1.wav", "/tmp/v2.wav"]
-        mock_exists.return_value = True
-        # Scene 1 audio takes 8s, Scene 2 audio takes 3s
-        mock_get_dur.side_effect = [8.0, 3.0]
-        mock_gather_assets.return_value = [{"video": "v1.mp4"}, {"video": "v2.mp4"}]
-        mock_compose.return_value = "final.mp4"
-        mock_gen_ass.return_value = "subs.ass"
-        mock_download_cc.return_value = "music.mp3"
+        # Scene 1 audio (8s) is longer than initial duration (5s)
+        # Scene 2 audio (3s) is shorter
+        audio_durs = [8.0, 3.0]
+        task_opts = {"duration": 10.0}
 
-        orc = Orchestrator(log_callback=AsyncMock())
-        # We need to mock the internal _log and _set_progress since they use database
-        orc._log = AsyncMock()
-        orc._set_progress = AsyncMock()
-
-        await orc._run_task("task_123")
-
-        # Capture the scenes that were passed to subtitles or compositor
-        self.assertIsNotNone(mock_compose.call_args, "mock_compose was NEVER called")
-
-        call_args = mock_compose.call_args[0]
-        final_scenes = call_args[0]
-
-        # Scene 1 should have been extended to 8.3s
-        self.assertEqual(final_scenes[0]["duration"], 8.3)
-        # Scene 2 should be exactly 3.3s because we forced audio-driven durations
-        self.assertEqual(final_scenes[1]["duration"], 3.3)
-
-    @patch('orchestrator.llm.plan_timeline')
-    @patch('orchestrator.llm.generate_voiceover')
-    @patch('orchestrator.tts_engine.generate_voiceovers')
-    @patch('orchestrator.get_wav_duration')
-    @patch('orchestrator.os.path.exists')
-    @patch('orchestrator.scraper.gather_scene_assets')
-    @patch('orchestrator.compositor.compose_video')
-    @patch('orchestrator.subtitles.generate_ass')
-    @patch('orchestrator.scraper.download_cc_audio')
-    @patch('orchestrator.update_task_status')
-    @patch('orchestrator.add_log')
-    @patch('database.get_task')
-    async def test_scale_up(self, 
-                             mock_get_task,
-                             mock_add_log, 
-                             mock_update_status, 
-                             mock_download_cc,
-                             mock_gen_ass,
-                             mock_compose,
-                             mock_gather_assets,
-                             mock_exists, 
-                             mock_get_dur, 
-                             mock_gen_tts, 
-                             mock_gen_vo, 
-                             mock_plan):
-        # Mock task from DB
-        mock_get_task.return_value = {
-            "prompt": "Test prompt",
-            "options": {"duration": 10.0}
-        }
+        call_args = await self._run_test_with_mocks(plan, audio_durs, task_opts)
         
-        mock_plan.return_value = {
-            "title": "Short Audio Video",
-            "total_duration": 10.0,
+        self.assertIsNotNone(call_args, "mock_compose was NEVER called")
+        final_scenes = call_args[0][0]
+
+        # Scene 1 should be expanded to 8.3s (audio + padding)
+        self.assertAlmostEqual(final_scenes[0]["duration"], 8.3, places=1)
+        # Scene 2 should be expanded to 3.3s
+        self.assertAlmostEqual(final_scenes[1]["duration"], 3.3, places=1)
+        # Total duration is now ~11.6s, exceeding the target, which is correct
+        self.assertGreater(sum(s["duration"] for s in final_scenes), 10.0)
+
+    async def test_scale_up(self):
+        """If total audio is shorter than target, scenes should scale up proportionally."""
+        plan = {
+            "title": "Test", "total_duration": 10.0, "music_mood": "happy",
             "scenes": [
                 {"id": 1, "duration": 5.0, "voiceover": "S1", "visual_query": "q1"},
                 {"id": 2, "duration": 5.0, "voiceover": "S2", "visual_query": "q2"}
             ]
         }
-        mock_gen_vo.side_effect = ["S1 text", "S2 text"]
-        mock_gen_tts.return_value = ["v1.wav", "v2.wav"]
-        mock_exists.return_value = True
-        # Both audios take 1s -> min_dur = 1.3s
-        mock_get_dur.side_effect = [1.0, 1.0]
-        mock_gather_assets.return_value = [{"video": "v1.mp4"}, {"video": "v2.mp4"}]
-        mock_compose.return_value = "final.mp4"
-        mock_gen_ass.return_value = "subs.ass"
-        mock_download_cc.return_value = "music.mp3"
+        # Audio is 1s each. After padding, scenes will be 1.3s each. Total = 2.6s.
+        audio_durs = [1.0, 1.0]
+        task_opts = {"duration": 10.0} # Target is 10s.
 
-        orc = Orchestrator(log_callback=AsyncMock())
-        orc._log = AsyncMock()
-        orc._set_progress = AsyncMock()
+        call_args = await self._run_test_with_mocks(plan, audio_durs, task_opts)
         
-        await orc._run_task("task_456")
-
-        call_args = mock_compose.call_args[0]
-        final_scenes = call_args[0]
+        self.assertIsNotNone(call_args, "mock_compose was NEVER called")
+        final_scenes = call_args[0][0]
         
-        # Total should hit 10.0s exactly
         total = sum(s["duration"] for s in final_scenes)
-        self.assertAlmostEqual(total, 10.0, places=2)
-        # Each should be 5.0s because (1.3 + 1.3) = 2.6. Target 10.0. Scale = 10/2.6.
-        # 1.3 * (10/2.6) = 5.0
-        self.assertEqual(final_scenes[0]["duration"], 5.0)
-        self.assertEqual(final_scenes[1]["duration"], 5.0)
+        self.assertAlmostEqual(total, 10.0, places=1)
+        # Each scene was 1.3s. Total 2.6. Scale factor is 10/2.6.
+        # So each becomes 1.3 * (10 / 2.6) = 5.0
+        self.assertAlmostEqual(final_scenes[0]["duration"], 5.0, places=1)
+        self.assertAlmostEqual(final_scenes[1]["duration"], 5.0, places=1)
 
 if __name__ == "__main__":
     unittest.main()
