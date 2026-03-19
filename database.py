@@ -209,3 +209,12 @@ async def get_all_settings() -> Dict[str, Any]:
         async with db.execute("SELECT key, value FROM settings") as cursor:
             rows = await cursor.fetchall()
             return {row[0]: json.loads(row[1]) for row in rows}
+
+async def fail_orphaned_tasks() -> None:
+    now = _utcnow()
+    async def _write(db: aiosqlite.Connection) -> None:
+        await db.execute(
+            "UPDATE tasks SET status = 'Failed', error = 'Server restarted', updated_at = ? WHERE status IN ('Running', 'Pending')",
+            (now,)
+        )
+    await _enqueue_write(_write)

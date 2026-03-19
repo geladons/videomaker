@@ -113,9 +113,24 @@ class Orchestrator:
         while True:
             task_id = await self.queue.get()
             self.active_task_id = task_id
-            await self._run_task(task_id)
-            self.active_task_id = None
-            self.queue.task_done()
+            self.current_async_task = asyncio.create_task(self._run_task(task_id))
+            try:
+                await self.current_async_task
+            except asyncio.CancelledError:
+                await update_task_status(task_id, "Failed", error="Task cancelled by user")
+                await self._log(task_id, "warn", "Task cancelled by user")
+            finally:
+                self.active_task_id = None
+                self.current_async_task = None
+                self.queue.task_done()
+
+    async def cancel_task(self, task_id: str) -> bool:
+        if self.active_task_id == task_id and hasattr(self, 'current_async_task') and self.current_async_task:
+            self.current_async_task.cancel()
+            return True
+        # If it's in the queue but not active, we would need to remove it from the queue, 
+        # but asyncio.Queue doesn't support random removal. We'll just handle active tasks for now.
+        return False
 
     async def _run_task(self, task_id: str) -> None:
         from database import get_task

@@ -7,7 +7,6 @@ import time
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 import httpx
-from bs4 import BeautifulSoup
 from duckduckgo_search import DDGS
 
 from config import (
@@ -83,7 +82,7 @@ async def download_cc_video(
         "1",
         "--no-progress",
         "--format",
-        "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/b",
+        "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/bestvideo+bestaudio/best",
         "-o",
         os.path.join(out_dir, "bg_%(id)s.%(ext)s"),
     ]

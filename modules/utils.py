@@ -4,7 +4,7 @@ import asyncio
 import os
 import re
 import shlex
-from typing import Awaitable, Callable, Dict, Iterable, List, Optional
+from typing import Awaitable, Callable, Dict, List, Optional
 
 LogFn = Callable[[str, str], Awaitable[None]]
 

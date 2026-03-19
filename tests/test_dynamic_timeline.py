@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import asyncio
-import os
 import unittest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 # Since get_setting is now the primary way to configure, we need a more robust mock
 async def mock_get_setting(key, default=None):

@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import httpx
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
@@ -33,6 +33,7 @@ from database import (
     list_logs,
     list_tasks,
     set_setting,
+    fail_orphaned_tasks,
 )
 from orchestrator import Orchestrator
 
@@ -82,6 +83,7 @@ orchestrator = Orchestrator(log_callback)
 @app.on_event("startup")
 async def on_startup() -> None:
     await init_db()
+    await fail_orphaned_tasks()
 
     # Consolidate Ollama settings setup
     for key, settings in OLLAMA_SETTINGS.items():
@@ -185,6 +187,13 @@ async def api_task(task_id: str) -> JSONResponse:
     task = await get_task(task_id)
     return JSONResponse({"task": task})
 
+
+@app.post("/api/tasks/{task_id}/cancel")
+async def api_cancel_task(task_id: str) -> JSONResponse:
+    success = await orchestrator.cancel_task(task_id)
+    if success:
+        return JSONResponse({"status": "cancelled"})
+    return JSONResponse({"error": "Task not active or not found"}, status_code=400)
 
 @app.get("/api/tasks/{task_id}/logs")
 async def api_logs(task_id: str, limit: int = 5000) -> JSONResponse:
