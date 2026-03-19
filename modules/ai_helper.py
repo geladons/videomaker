@@ -211,6 +211,7 @@ async def repair_json(
 
     if log:
         await log("raw", f"AI Repair prompt:\n{prompt}")
+        await log("raw", f"AI Repair full payload:\n{json.dumps(payload, indent=2, default=str)}")
 
     async with httpx.AsyncClient(timeout=timeout) as client:
         resp = await client.post(f"{api_url}/api/generate", json=payload)
@@ -265,6 +266,7 @@ async def summarize_error(
 
     if log:
         await log("raw", f"Error summary prompt:\n{prompt}")
+        await log("raw", f"Error summary full payload:\n{json.dumps(payload, indent=2, default=str)}")
 
     async with httpx.AsyncClient(timeout=timeout) as client:
         resp = await client.post(f"{api_url}/api/generate", json=payload)

@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Video Generator Cache Manager</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/static/styles.css" />
+  <script defer src="/static/app.js"></script>
+</head>
+<body class="min-h-screen">
+  <div class="hero-gradient"></div>
+  <div class="relative z-10 max-w-6xl mx-auto px-6 py-10">
+    <header class="flex items-center justify-between mb-10">
+      <div>
+        <p class="text-xs uppercase tracking-[0.3em] text-amber-300">Maintenance</p>
+        <h1 class="text-4xl font-semibold">Cache Manager</h1>
+        <p class="text-slate-300 mt-2">Monitor storage usage and clean up temporary files.</p>
+      </div>
+      <nav class="flex gap-4 text-sm">
+        <a class="nav-link" href="/">Dashboard</a>
+        <a class="nav-link" href="/settings">Settings</a>
+        <a class="nav-link" href="/history">History</a>
+        <a class="nav-link" href="/cache">Cache</a>
+      </nav>
+    </header>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      <section class="panel">
+        <div class="text-xs uppercase tracking-[0.2em] text-slate-400 mb-2">Workspaces</div>
+        <div id="workspaceSize" class="text-3xl font-semibold text-amber-300">--</div>
+        <div id="workspaceFiles" class="text-sm text-slate-400 mt-1">-- files</div>
+        <div class="progress-bar mt-3">
+          <div id="workspaceBar" class="progress-fill" style="width: 0%"></div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="text-xs uppercase tracking-[0.2em] text-slate-400 mb-2">Outputs</div>
+        <div id="outputSize" class="text-3xl font-semibold text-emerald-300">--</div>
+        <div id="outputFiles" class="text-sm text-slate-400 mt-1">-- files</div>
+        <div class="progress-bar mt-3">
+          <div id="outputBar" class="progress-fill" style="width: 0%"></div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="text-xs uppercase tracking-[0.2em] text-slate-400 mb-2">Total Usage</div>
+        <div id="totalSize" class="text-3xl font-semibold text-sky-300">--</div>
+        <div id="tempFiles" class="text-sm text-slate-400 mt-1">-- temp files found</div>
+        <div class="progress-bar mt-3">
+          <div id="totalBar" class="progress-fill" style="width: 0%"></div>
+        </div>
+      </section>
+    </div>
+
+    <section class="panel mb-8">
+      <h2 class="text-xl font-semibold mb-4">Cache Cleanup</h2>
+      <p class="text-sm text-slate-400 mb-4">
+        Remove orphaned temporary files (<code class="text-amber-300">.part</code>, 
+        <code class="text-amber-300">.ytdl</code>, <code class="text-amber-300">.tmp</code>) 
+        left behind by interrupted downloads and failed tasks. This will NOT delete your 
+        completed videos or active workspace data.
+      </p>
+      <div class="flex items-center gap-4">
+        <button id="clearCacheBtn" class="btn-primary">
+          Clear Temporary Files
+        </button>
+        <button id="refreshCacheBtn" class="btn-ghost">
+          Refresh Stats
+        </button>
+      </div>
+      <div id="clearResult" class="mt-4 text-sm hidden">
+        <div class="rounded-xl p-4 bg-slate-800/60 border border-slate-700">
+          <div id="clearSummary" class="text-slate-200"></div>
+          <div id="clearErrors" class="text-red-400 mt-2"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2 class="text-xl font-semibold mb-4">Danger Zone</h2>
+      <p class="text-sm text-slate-400 mb-4">
+        Completely wipe all workspace data. This removes all in-progress task files, 
+        downloaded assets, and temporary directories. Completed outputs in <code class="text-amber-300">outputs/</code> 
+        are preserved. <strong class="text-red-400">This action cannot be undone.</strong>
+      </p>
+      <div class="flex items-center gap-4">
+        <button id="wipeWorkspacesBtn" class="btn-ghost border-red-500/50 text-red-400 hover:border-red-400">
+          Wipe All Workspaces
+        </button>
+      </div>
+      <div id="wipeResult" class="mt-4 text-sm hidden">
+        <div class="rounded-xl p-4 bg-red-900/30 border border-red-700/50">
+          <div id="wipeSummary" class="text-red-300"></div>
+        </div>
+      </div>
+    </section>
+  </div>
+</body>
+</html>

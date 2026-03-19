@@ -25,6 +25,7 @@ from config import (
     OLLAMA_API_URL,
     OUTPUT_DIR,
     SUPPORTED_LANGUAGES,
+    WORKSPACE_DIR,
 )
 from database import (
     get_all_settings,
@@ -343,6 +344,135 @@ async def api_download_logs(task_id: str) -> FileResponse:
     if not os.path.exists(log_path):
         raise HTTPException(status_code=404, detail="Log file not found")
     return FileResponse(log_path, filename=f"{task_id}.log")
+
+
+@app.get("/cache", response_class=HTMLResponse)
+async def cache_page(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse("cache.html", {"request": request})
+
+
+@app.get("/api/cache")
+async def api_cache_stats() -> JSONResponse:
+    """Calculate total disk space used by workspaces/ and outputs/."""
+    def _get_dir_size(path: str) -> int:
+        total = 0
+        try:
+            for entry in os.scandir(path):
+                try:
+                    if entry.is_file(follow_symlinks=False):
+                        total += entry.stat().st_size
+                    elif entry.is_dir(follow_symlinks=False):
+                        total += _get_dir_size(entry.path)
+                except (OSError, PermissionError):
+                    continue
+        except (OSError, PermissionError):
+            pass
+        return total
+
+    def _count_files(path: str, extensions: tuple = None) -> int:
+        count = 0
+        try:
+            for root, dirs, files in os.walk(path):
+                for f in files:
+                    if extensions is None or any(f.lower().endswith(ext) for ext in extensions):
+                        count += 1
+        except (OSError, PermissionError):
+            pass
+        return count
+
+    workspace_size = _get_dir_size(WORKSPACE_DIR)
+    output_size = _get_dir_size(OUTPUT_DIR)
+    total_size = workspace_size + output_size
+
+    workspace_files = _count_files(WORKSPACE_DIR)
+    output_files = _count_files(OUTPUT_DIR)
+
+    # Count temp files specifically
+    temp_files = _count_files(WORKSPACE_DIR, extensions=(".part", ".ytdl", ".tmp"))
+
+    def _format_size(size_bytes: int) -> str:
+        for unit in ["B", "KB", "MB", "GB", "TB"]:
+            if size_bytes < 1024:
+                return f"{size_bytes:.2f} {unit}"
+            size_bytes /= 1024
+        return f"{size_bytes:.2f} PB"
+
+    return JSONResponse({
+        "workspace": {
+            "path": WORKSPACE_DIR,
+            "size_bytes": workspace_size,
+            "size_human": _format_size(workspace_size),
+            "file_count": workspace_files,
+        },
+        "outputs": {
+            "path": OUTPUT_DIR,
+            "size_bytes": output_size,
+            "size_human": _format_size(output_size),
+            "file_count": output_files,
+        },
+        "total": {
+            "size_bytes": total_size,
+            "size_human": _format_size(total_size),
+        },
+        "temp_files": temp_files,
+    })
+
+
+@app.post("/api/cache/clear")
+async def api_cache_clear() -> JSONResponse:
+    """Safely delete orphaned temporary folders and leftover yt-dlp files inside workspaces/."""
+    deleted_files = 0
+    deleted_dirs = 0
+    errors = []
+
+    temp_extensions = (".part", ".ytdl", ".tmp", ".temp")
+
+    try:
+        if not os.path.exists(WORKSPACE_DIR):
+            return JSONResponse({"status": "ok", "deleted_files": 0, "deleted_dirs": 0, "errors": []})
+
+        # Delete temp files with specific extensions
+        for root, dirs, files in os.walk(WORKSPACE_DIR, topdown=False):
+            for name in files:
+                if any(name.lower().endswith(ext) for ext in temp_extensions):
+                    path = os.path.join(root, name)
+                    try:
+                        os.remove(path)
+                        deleted_files += 1
+                    except (OSError, PermissionError) as e:
+                        errors.append(f"Could not delete {path}: {e}")
+
+            # Remove empty directories
+            for name in dirs:
+                dir_path = os.path.join(root, name)
+                try:
+                    if not os.listdir(dir_path):
+                        os.rmdir(dir_path)
+                        deleted_dirs += 1
+                except (OSError, PermissionError) as e:
+                    errors.append(f"Could not remove dir {dir_path}: {e}")
+
+        # Also clean temp files from outputs
+        if os.path.exists(OUTPUT_DIR):
+            for root, dirs, files in os.walk(OUTPUT_DIR, topdown=False):
+                for name in files:
+                    if any(name.lower().endswith(ext) for ext in temp_extensions):
+                        path = os.path.join(root, name)
+                        try:
+                            os.remove(path)
+                            deleted_files += 1
+                        except (OSError, PermissionError) as e:
+                            errors.append(f"Could not delete {path}: {e}")
+
+    except Exception as e:
+        errors.append(f"Unexpected error: {e}")
+
+    return JSONResponse({
+        "status": "ok",
+        "deleted_files": deleted_files,
+        "deleted_dirs": deleted_dirs,
+        "errors": errors,
+    })
 
 
 @app.websocket("/ws/logs")

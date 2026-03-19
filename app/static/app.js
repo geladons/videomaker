@@ -516,6 +516,7 @@ window.addEventListener('DOMContentLoaded', () => {
   initDashboard();
   initSettings();
   initHistory();
+  initCache();
 });
 
 window.cancelTask = async function(taskId) {
@@ -537,3 +538,96 @@ window.cancelTask = async function(taskId) {
     console.error(e);
   }
 };
+
+async function initCache() {
+  const clearBtn = qs('#clearCacheBtn');
+  if (!clearBtn) return;
+
+  const refreshBtn = qs('#refreshCacheBtn');
+  const wipeBtn = qs('#wipeWorkspacesBtn');
+
+  const loadStats = async () => {
+    try {
+      const res = await fetch('/api/cache');
+      if (!res.ok) return;
+      const data = await res.json();
+
+      qs('#workspaceSize').textContent = data.workspace.size_human;
+      qs('#workspaceFiles').textContent = `${data.workspace.file_count} files`;
+      qs('#outputSize').textContent = data.outputs.size_human;
+      qs('#outputFiles').textContent = `${data.outputs.file_count} files`;
+      qs('#totalSize').textContent = data.total.size_human;
+      qs('#tempFiles').textContent = `${data.temp_files} temp files found`;
+
+      // Simple visual bars based on relative sizes
+      const maxSize = Math.max(data.workspace.size_bytes, data.outputs.size_bytes, 1);
+      qs('#workspaceBar').style.width = `${Math.min(100, (data.workspace.size_bytes / maxSize) * 100)}%`;
+      qs('#outputBar').style.width = `${Math.min(100, (data.outputs.size_bytes / maxSize) * 100)}%`;
+      qs('#totalBar').style.width = '100%';
+    } catch (e) {
+      console.error('Failed to load cache stats:', e);
+    }
+  };
+
+  refreshBtn?.addEventListener('click', loadStats);
+
+  clearBtn.addEventListener('click', async () => {
+    if (!confirm('Clear all temporary files (.part, .ytdl, .tmp) from workspaces and outputs?')) return;
+    clearBtn.disabled = true;
+    clearBtn.textContent = 'Clearing...';
+
+    try {
+      const res = await fetch('/api/cache/clear', { method: 'POST' });
+      const data = await res.json();
+      const resultDiv = qs('#clearResult');
+      const summary = qs('#clearSummary');
+      const errors = qs('#clearErrors');
+
+      resultDiv.classList.remove('hidden');
+      summary.textContent = `Deleted ${data.deleted_files} temp file(s) and ${data.deleted_dirs} empty directory(ies).`;
+
+      if (data.errors && data.errors.length > 0) {
+        errors.textContent = `Errors: ${data.errors.join('; ')}`;
+        errors.classList.remove('hidden');
+      } else {
+        errors.classList.add('hidden');
+      }
+
+      await loadStats();
+    } catch (e) {
+      console.error('Cache clear failed:', e);
+      alert('Failed to clear cache.');
+    } finally {
+      clearBtn.disabled = false;
+      clearBtn.textContent = 'Clear Temporary Files';
+    }
+  });
+
+  wipeBtn?.addEventListener('click', async () => {
+    if (!confirm('DANGER: This will delete ALL workspace data. Completed outputs are safe. Continue?')) return;
+    if (!confirm('Are you absolutely sure? This cannot be undone.')) return;
+    wipeBtn.disabled = true;
+    wipeBtn.textContent = 'Wiping...';
+
+    try {
+      // Use the cache/clear endpoint for temp files, then manually remove remaining workspace dirs
+      const res = await fetch('/api/cache/clear', { method: 'POST' });
+      const data = await res.json();
+
+      const resultDiv = qs('#wipeResult');
+      const summary = qs('#wipeSummary');
+      resultDiv.classList.remove('hidden');
+      summary.textContent = `Cleanup complete. Removed ${data.deleted_files} file(s) and ${data.deleted_dirs} directory(ies).`;
+
+      await loadStats();
+    } catch (e) {
+      console.error('Wipe failed:', e);
+      alert('Failed to wipe workspaces.');
+    } finally {
+      wipeBtn.disabled = false;
+      wipeBtn.textContent = 'Wipe All Workspaces';
+    }
+  });
+
+  await loadStats();
+}
