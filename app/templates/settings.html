@@ -405,11 +405,33 @@
           </div>
           <div>
             <label class="label">Coqui Model</label>
-            <input id="coqui_model" class="input" placeholder="tts_models/en/vctk/vits" />
+            <select id="coqui_model" class="input">
+              <option value="tts_models/multilingual/multi-dataset/xtts_v2">XTTS v2 (multilingual, best quality)</option>
+              <option value="tts_models/en/vctk/vits">VCTK (English multi-speaker)</option>
+              <option value="tts_models/en/ljspeech/tacotron2-DDC">LJSpeech Tacotron2</option>
+              <option value="tts_models/en/ljspeech/glow-tts">LJSpeech GlowTTS</option>
+              <option value="__custom__">Custom...</option>
+            </select>
+            <input id="coqui_model_custom" class="input mt-2 hidden" placeholder="tts_models/en/vctk/vits" />
           </div>
           <div>
             <label class="label">Coqui Speaker (optional)</label>
-            <input id="coqui_speaker" class="input" placeholder="p225" />
+            <select id="coqui_speaker" class="input">
+              <option value="">Auto (based on language)</option>
+              <option value="p225">p225 (English Female)</option>
+              <option value="p226">p226 (English Male)</option>
+              <option value="p227">p227 (English Female)</option>
+              <option value="p228">p228 (English Male)</option>
+              <option value="p229">p229 (English Female)</option>
+              <option value="p230">p230 (English Male)</option>
+              <option value="p231">p231 (English Female)</option>
+              <option value="p232">p232 (English Female)</option>
+              <option value="p233">p233 (English Male)</option>
+              <option value="p234">p234 (English Female)</option>
+              <option value="p236">p236 (English Female)</option>
+              <option value="__custom__">Custom...</option>
+            </select>
+            <input id="coqui_speaker_custom" class="input mt-2 hidden" placeholder="p225" />
           </div>
           <div>
             <label class="label">Voice Model Path</label>

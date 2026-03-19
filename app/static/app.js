@@ -315,8 +315,52 @@ async function initSettings() {
   qs('#subtitle_margin_y').value = video.subtitle_margin_y ?? 60;
 
   qs('#tts_engine').value = settings.tts_engine || 'piper';
-  qs('#coqui_model').value = settings.coqui_model || 'tts_models/en/vctk/vits';
-  qs('#coqui_speaker').value = settings.coqui_speaker || '';
+  
+  // Handle Coqui Model dropdown with custom option
+  const coquiModel = settings.coqui_model || 'tts_models/multilingual/multi-dataset/xtts_v2';
+  const coquiModelSelect = qs('#coqui_model');
+  const coquiModelCustom = qs('#coqui_model_custom');
+  const modelOptions = Array.from(coquiModelSelect.options).map(o => o.value);
+  if (modelOptions.includes(coquiModel)) {
+    coquiModelSelect.value = coquiModel;
+    coquiModelCustom.classList.add('hidden');
+  } else {
+    coquiModelSelect.value = '__custom__';
+    coquiModelCustom.value = coquiModel;
+    coquiModelCustom.classList.remove('hidden');
+  }
+  
+  // Handle Coqui Speaker dropdown with custom option
+  const coquiSpeaker = settings.coqui_speaker || '';
+  const coquiSpeakerSelect = qs('#coqui_speaker');
+  const coquiSpeakerCustom = qs('#coqui_speaker_custom');
+  const speakerOptions = Array.from(coquiSpeakerSelect.options).map(o => o.value);
+  if (speakerOptions.includes(coquiSpeaker)) {
+    coquiSpeakerSelect.value = coquiSpeaker;
+    coquiSpeakerCustom.classList.add('hidden');
+  } else {
+    coquiSpeakerSelect.value = '__custom__';
+    coquiSpeakerCustom.value = coquiSpeaker;
+    coquiSpeakerCustom.classList.remove('hidden');
+  }
+  
+  // Toggle custom inputs when dropdown changes
+  coquiModelSelect.addEventListener('change', () => {
+    if (coquiModelSelect.value === '__custom__') {
+      coquiModelCustom.classList.remove('hidden');
+      coquiModelCustom.focus();
+    } else {
+      coquiModelCustom.classList.add('hidden');
+    }
+  });
+  coquiSpeakerSelect.addEventListener('change', () => {
+    if (coquiSpeakerSelect.value === '__custom__') {
+      coquiSpeakerCustom.classList.remove('hidden');
+      coquiSpeakerCustom.focus();
+    } else {
+      coquiSpeakerCustom.classList.add('hidden');
+    }
+  });
   qs('#tts_voice_path').value = settings.tts_voice_path || '/models/piper/en_US-lessac-medium.onnx';
   qs('#tts_voice_config').value = settings.tts_voice_config || '/models/piper/en_US-lessac-medium.onnx.json';
   qs('#voiceover_wps').value = settings.voiceover_words_per_sec ?? 2.2;
@@ -455,8 +499,8 @@ async function initSettings() {
         video_seek_offset: numOr(qs('#video_seek_offset').value, video.video_seek_offset ?? 15),
       },
       tts_engine: qs('#tts_engine').value,
-      coqui_model: qs('#coqui_model').value,
-      coqui_speaker: qs('#coqui_speaker').value,
+      coqui_model: qs('#coqui_model').value === '__custom__' ? qs('#coqui_model_custom').value : qs('#coqui_model').value,
+      coqui_speaker: qs('#coqui_speaker').value === '__custom__' ? qs('#coqui_speaker_custom').value : qs('#coqui_speaker').value,
       tts_voice_path: qs('#tts_voice_path').value,
       tts_voice_config: qs('#tts_voice_config').value,
       voiceover_words_per_sec: numOr(qs('#voiceover_wps').value, settings.voiceover_words_per_sec ?? 2.2),
