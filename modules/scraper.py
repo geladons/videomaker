@@ -22,6 +22,13 @@ from modules.utils import ensure_dir, run_command, clean_and_tokenize
 LogFn = Callable[[str, str], Awaitable[None]]
 
 
+SCRAPER_CONSTRAINTS = [
+    "--match-filter",
+    "duration < 300",
+    "--download-sections",
+    "*0-60",
+]
+
 async def _latest_file(
     directory: str, exts: List[str], min_mtime: Optional[float] = None
 ) -> Optional[str]:
@@ -64,9 +71,8 @@ async def download_cc_video(
     log: LogFn,
     scraper_settings: Optional[Dict[str, Any]] = None,
 ) -> Optional[str]:
-    # Ensure directory exists before download
     ensure_dir(out_dir)
-    await asyncio.sleep(0.1)  # Small delay to ensure FS sync
+    await asyncio.sleep(0.1)
 
     settings = scraper_settings or {}
     search_count = int(settings.get("yt_dlp_search_count", 8))
@@ -85,10 +91,7 @@ async def download_cc_video(
         "--no-progress",
         "--format",
         "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/bestvideo+bestaudio/best",
-        "--match-filter",
-        "duration < 600",
-        "--download-sections",
-        "*0-60",
+        *SCRAPER_CONSTRAINTS,
         "-o",
         os.path.join(out_dir, "bg_%(id)s.%(ext)s"),
     ]
@@ -126,9 +129,8 @@ async def download_cc_audio(
     scraper_settings: Optional[Dict[str, Any]] = None,
     mood: str = "cinematic",
 ) -> Optional[str]:
-    # Ensure directory exists before download
     ensure_dir(out_dir)
-    await asyncio.sleep(0.1)  # Small delay to ensure FS sync
+    await asyncio.sleep(0.1)
 
     settings = scraper_settings or {}
     search_count = int(settings.get("yt_dlp_search_count", 4))  # Reduced for audio
@@ -159,6 +161,7 @@ async def download_cc_audio(
         "mp3",
         "--audio-quality",
         "0",
+        *SCRAPER_CONSTRAINTS,
         "-o",
         os.path.join(out_dir, "music_%(id)s.%(ext)s"),
     ]
@@ -302,6 +305,7 @@ async def _download_audio_fallback(
             "mp3",
             "--audio-quality",
             "0",  # Best quality
+            *SCRAPER_CONSTRAINTS,
             "-o",
             os.path.join(out_dir, "music_%(id)s.%(ext)s"),
             "--no-check-certificate",
@@ -594,7 +598,6 @@ async def gather_scene_assets(
             for q_idx, query in enumerate(queries):
                 await log("info", f"Searching images for scene {idx} (attempt {q_idx+1}): {query}")
                 urls = []
-                # Try DuckDuckGo first (more results)
                 try:
                     urls = await search_duckduckgo_images(query, limit=2)
                 except Exception:
