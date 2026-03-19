@@ -294,6 +294,8 @@ async def generate_voiceover(
     is_last: bool = False,
     request_delay: float = 0.8,
     log: Optional[LogFn] = None,
+    full_timeline: Optional[List[Dict[str, Any]]] = None,
+    previous_voiceovers: Optional[List[str]] = None,
 ) -> str:
     if target_words <= 0:
         target_words = 30
@@ -318,13 +320,32 @@ async def generate_voiceover(
     if add_closing and is_last:
         closing_hint = "Include a short, friendly closing line at the end.\n"
 
+    timeline_context = ""
+    if full_timeline:
+        outlines = [
+            f"Scene {s.get('id', i+1)}: {s.get('voiceover', '').strip()}"
+            for i, s in enumerate(full_timeline)
+        ]
+        timeline_context = "Full Narrative Arc:\n" + "\n".join(outlines) + "\n\n"
+
+    history_context = ""
+    if previous_voiceovers:
+        history_context = (
+            "Previous Voiceovers (for continuity):\n"
+            + "\n".join(previous_voiceovers[-2:])
+            + "\n\n"
+        )
+
     prompt = (
-        "You are a professional video narrator. Write the narration for ONE scene.\n"
+        "You are a professional video narrator. Write the narration for ONE scene while maintaining narrative flow with the rest of the video.\n"
         f"Language: {language}.\n"
         f"Target length: about {target_words} words (min {min_words}, max {max_words}).\n"
         "Do not use labels, quotes, or stage directions. Do not say 'narrator'.\n"
         "Return ONLY the narration text.\n\n"
+        f"{timeline_context}"
+        f"{history_context}"
         f"{greeting_hint}{closing_hint}"
+        "CURRENT SCENE TO NARRATE:\n"
         f"Scene outline: {base_outline}\n"
         f"Visuals: {visual_query}\n"
         f"Overlay text: {overlay_text}\n"
@@ -342,6 +363,9 @@ async def generate_voiceover(
         if request_delay > 0:
             await asyncio.sleep(request_delay)
             
+        if log:
+            await log("raw", f"LLM Voiceover prompt:\n{payload.get('prompt', '')}")
+
         # For voiceover, we don't need JSON validation, just the raw text response
         async with httpx.AsyncClient(timeout=timeout) as client:
             resp = await client.post(f"{api_url}/api/generate", json=payload)
@@ -403,6 +427,9 @@ async def generate_search_queries(
         if request_delay > 0:
             await asyncio.sleep(request_delay)
             
+        if log:
+            await log("raw", f"LLM Search queries prompt:\n{payload.get('prompt', '')}")
+
         async with httpx.AsyncClient(timeout=timeout) as client:
             resp = await client.post(f"{api_url}/api/generate", json=payload)
             resp.raise_for_status()
@@ -460,6 +487,9 @@ async def evaluate_asset_match(
         "stream": False,
         "options": options,
     }
+
+    if log:
+        await log("raw", f"Asset match prompt:\n{prompt}")
 
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:

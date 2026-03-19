@@ -209,6 +209,9 @@ async def repair_json(
         "options": options,
     }
 
+    if log:
+        await log("raw", f"AI Repair prompt:\n{prompt}")
+
     async with httpx.AsyncClient(timeout=timeout) as client:
         resp = await client.post(f"{api_url}/api/generate", json=payload)
         if resp.status_code in {400, 422} and "format" in resp.text.lower():
@@ -245,6 +248,7 @@ async def summarize_error(
     options: Dict[str, Any],
     timeout: float,
     think: bool = False,
+    log: Optional[LogFn] = None,
 ) -> str:
     prompt = (
         "Summarize the following error in one short sentence. "
@@ -258,6 +262,10 @@ async def summarize_error(
         "think": think,
         "options": options,
     }
+
+    if log:
+        await log("raw", f"Error summary prompt:\n{prompt}")
+
     async with httpx.AsyncClient(timeout=timeout) as client:
         resp = await client.post(f"{api_url}/api/generate", json=payload)
         resp.raise_for_status()
@@ -279,6 +287,9 @@ async def call_llm_with_retry(
 
     for attempt in range(1, max_retries + 1):
         try:
+            if log:
+                await log("raw", f"LLM prompt (attempt {attempt}):\n{current_payload.get('prompt', '')}")
+
             async with httpx.AsyncClient(timeout=timeout) as client:
                 resp = await client.post(f"{api_url}/api/generate", json=current_payload)
                 if resp.status_code in {400, 422} and "format" in resp.text.lower():

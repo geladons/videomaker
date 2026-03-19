@@ -197,6 +197,7 @@ class Orchestrator:
                 task_id, "info", "Generating scene voiceovers with Writer LLM"
             )
             num_scenes = len(scenes)
+            previous_voiceovers = []
             for idx, scene in enumerate(scenes, start=1):
                 # Voiceover script generation: 15% -> 30%
                 p = 15 + int((idx / num_scenes) * 15)
@@ -220,8 +221,11 @@ class Orchestrator:
                         is_last=idx == len(scenes),
                         request_delay=float(cfg["ollama_request_delay"]),
                         log=lambda lvl, msg: self._log(task_id, lvl, msg),
+                        full_timeline=scenes,
+                        previous_voiceovers=previous_voiceovers,
                     )
                     scene["voiceover"] = voice_text
+                    previous_voiceovers.append(voice_text)
                     await self._log(
                         task_id,
                         "info",
