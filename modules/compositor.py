@@ -38,13 +38,14 @@ def _build_video_filters(
 ) -> Tuple[str, str]:
     filters = []
     
+    common = "format=yuv420p,setsar=1,settb=1/AVTB,setpts=PTS-STARTPTS"
     if bg_video:
         bg_filter = (
             f"[0:v]scale={width}:{height}:force_original_aspect_ratio=increase,"
-            f"crop={width}:{height},fps={fps},setsar=1,format=yuv420p,settb=1/AVTB,pts=STARTPTS[bg]"
+            f"crop={width}:{height},fps={fps},{common}[bg]"
         )
     else:
-        bg_filter = "[0:v]format=yuv420p,setsar=1,settb=1/AVTB,pts=STARTPTS,noise=alls=8:allf=t+u[bg]"
+        bg_filter = f"[0:v]{common},noise=alls=8:allf=t+u[bg]"
 
     filters.append(bg_filter)
     current_label = "[bg]"
