@@ -36,6 +36,7 @@ PIPER_VOICE_CONFIG = os.environ.get(
     "PIPER_VOICE_CONFIG",
     os.path.join(MODELS_DIR, "piper", "en_US-lessac-medium.onnx.json"),
 )
+PIPER_MAX_THREADS = int(os.environ.get("PIPER_MAX_THREADS", "1"))
 
 # TTS Engine Defaults
 DEFAULT_TTS_ENGINE = os.environ.get("TTS_ENGINE", "coqui")
@@ -194,3 +195,4 @@ class AppPaths:
     whisper_model_path: str = WHISPER_MODEL_PATH
     piper_voice_path: str = PIPER_VOICE_PATH
     piper_voice_config: str = PIPER_VOICE_CONFIG
+    piper_max_threads: int = PIPER_MAX_THREADS

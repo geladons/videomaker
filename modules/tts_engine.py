@@ -10,6 +10,7 @@ from config import (
     LANGUAGE_SPEAKERS,
     LANGUAGE_TO_PIPER,
     MODELS_DIR,
+    PIPER_MAX_THREADS,
     PIPER_VOICE_CONFIG,
     PIPER_VOICE_PATH,
 )
@@ -32,9 +33,12 @@ async def _run_piper(
         cmd.extend(["--config", config_path])
 
     env = os.environ.copy()
-    cpu_count = os.cpu_count() or 4
-    env.setdefault("OMP_NUM_THREADS", str(cpu_count))
-    env.setdefault("ORT_DISABLE_CPU_EMT", "1")
+    threads = str(PIPER_MAX_THREADS)
+    env["OMP_NUM_THREADS"] = threads
+    env["ONNXRUNTIME_INTRA_OP_NUM_THREADS"] = threads
+    env["ONNXRUNTIME_INTER_OP_NUM_THREADS"] = threads
+    env["ORT_DISABLE_CPU_AFFINITY"] = "1"
+    env["ORT_DISABLE_CPU_EXT"] = "1"
 
     await log("info", f"$ {' '.join(cmd)}")
     process = await asyncio.create_subprocess_exec(
