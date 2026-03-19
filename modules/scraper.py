@@ -299,7 +299,7 @@ async def _download_audio_fallback(
             "0",  # Best quality
             "-o",
             os.path.join(out_dir, "music_%(id)s.%(ext)s"),
-            "--nocheckcertificate",
+            "--no-check-certificate",
             "--prefer-insecure",
         ]
 
