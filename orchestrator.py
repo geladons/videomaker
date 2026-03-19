@@ -162,6 +162,11 @@ class Orchestrator:
                 think=bool(cfg["planner"]["think"]),
                 helper_settings=cfg["helper"],
                 target_duration=float(options.get("duration", 0) or 0),
+                language=options.get("language", "English"),
+                scene_count=options.get("scene_count"),
+                add_greeting=bool(options.get("add_greeting", False)),
+                add_closing=bool(options.get("add_closing", False)),
+                words_per_sec=float(cfg["tts"]["voiceover_wps"]),
                 request_delay=float(cfg["ollama_request_delay"]),
                 log=lambda lvl, msg: self._log(task_id, lvl, msg),
             )

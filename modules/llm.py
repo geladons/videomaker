@@ -22,31 +22,57 @@ from modules.ai_helper import (
 )
 from modules.utils import clean_and_tokenize
 
-SYSTEM_PROMPT = """
+def get_planner_prompt(
+    target_duration: float,
+    language: str = "English",
+    scene_count: Optional[int] = None,
+    add_greeting: bool = False,
+    add_closing: bool = False,
+    words_per_sec: float = 2.0,
+) -> str:
+    scene_rule = f"Make exactly {scene_count} scenes." if scene_count else "Make 3-8 scenes."
+    greeting_rule = (
+        "Include a short, friendly greeting in the first scene outline."
+        if add_greeting
+        else ""
+    )
+    closing_rule = (
+        "Include a short, friendly closing line in the last scene outline."
+        if add_closing
+        else ""
+    )
+
+    return f"""
 You are a video planning assistant. Convert the user prompt into strict JSON only.
+Target Language: {language}
+Target Duration: {target_duration} seconds
+Voiceover Density: ~{words_per_sec} words per second
+
 Return JSON with this schema:
-{
+{{
   "title": "short title",
-  "total_duration": number (seconds),
+  "total_duration": {target_duration},
   "music_mood": "string",
   "scenes": [
-    {
+    {{
       "id": integer,
       "duration": number (seconds),
       "voiceover": "string",
       "visual_query": "string",
       "overlay_text": "string"
-    }
+    }}
   ]
-}
+}}
 Rules:
 - JSON only. No markdown.
 - Use double quotes for all strings.
 - No trailing commas.
 - Do not wrap in code fences.
-- Ensure durations sum to total_duration.
-- Make 3-8 scenes.
+- {scene_rule}
+- The sum of all scene durations MUST be exactly {target_duration} seconds.
 - The voiceover field should be a brief 1-sentence outline, not the final narration.
+- {greeting_rule}
+- {closing_rule}
 """.strip()
 
 
@@ -72,12 +98,26 @@ def _build_payload(
     prompt: str,
     model: str,
     options: Dict[str, Any],
+    target_duration: float,
+    language: str = "English",
+    scene_count: Optional[int] = None,
+    add_greeting: bool = False,
+    add_closing: bool = False,
+    words_per_sec: float = 2.0,
     force_json: bool = True,
     think: bool = False,
 ) -> Dict[str, Any]:
+    system_prompt = get_planner_prompt(
+        target_duration=target_duration,
+        language=language,
+        scene_count=scene_count,
+        add_greeting=add_greeting,
+        add_closing=add_closing,
+        words_per_sec=words_per_sec,
+    )
     payload: Dict[str, Any] = {
         "model": model,
-        "prompt": f"{SYSTEM_PROMPT}\n\nUser prompt: {prompt}",
+        "prompt": f"{system_prompt}\n\nUser prompt: {prompt}",
         "stream": False,
         "think": think,
         "options": options,
@@ -149,6 +189,11 @@ async def plan_timeline(
     think: bool = False,
     helper_settings: Optional[Dict[str, Any]] = None,
     target_duration: Optional[float] = None,
+    language: str = "English",
+    scene_count: Optional[int] = None,
+    add_greeting: bool = False,
+    add_closing: bool = False,
+    words_per_sec: float = 2.0,
     request_delay: float = 0.8,
     log: Optional[LogFn] = None,
 ) -> Dict[str, Any]:
@@ -159,6 +204,12 @@ async def plan_timeline(
         prompt,
         model,
         merged_options,
+        target_duration=float(target_duration or 30),
+        language=language,
+        scene_count=scene_count,
+        add_greeting=add_greeting,
+        add_closing=add_closing,
+        words_per_sec=words_per_sec,
         force_json=True,
         think=think,
     )
