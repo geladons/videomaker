@@ -16,7 +16,7 @@ def _extract_json(text: str) -> Dict[str, Any]:
     if cleaned.startswith("{") and cleaned.endswith("}"):
         try:
             return json.loads(cleaned)
-        except json.JSONDecodeError as e:
+        except Exception as e:
             raise ValueError(f"Invalid JSON in vision response: {e}. Raw: {cleaned[:200]}...") from e
     start = cleaned.find("{")
     end = cleaned.rfind("}")
@@ -24,7 +24,7 @@ def _extract_json(text: str) -> Dict[str, Any]:
         content = cleaned[start : end + 1]
         try:
             return json.loads(content)
-        except json.JSONDecodeError as e:
+        except Exception as e:
             raise ValueError(f"Invalid JSON found in markers (vision): {e}. Raw: {content[:200]}...") from e
     raise ValueError(f"No JSON object found in vision response. Raw: {cleaned[:200]}...")
 

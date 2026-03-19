@@ -60,7 +60,7 @@ def _extract_json(text: str) -> Any:
     if (cleaned.startswith("{") and cleaned.endswith("}")) or (cleaned.startswith("[") and cleaned.endswith("]")):
         try:
             return json.loads(cleaned)
-        except json.JSONDecodeError as e:
+        except Exception as e:
             raise ValueError(f"Invalid JSON in model response: {e}. Raw: {cleaned[:200]}...") from e
     
     start_obj, start_arr = cleaned.find("{"), cleaned.find("[")
@@ -75,7 +75,7 @@ def _extract_json(text: str) -> Any:
         content = cleaned[start : end + 1]
         try:
             return json.loads(content)
-        except json.JSONDecodeError as e:
+        except Exception as e:
             raise ValueError(f"Invalid JSON found in markers: {e}. Raw: {content[:200]}...") from e
     raise ValueError(f"No JSON object or array found with valid markers. Raw: {cleaned[:200]}...")
 
@@ -145,7 +145,7 @@ def _repair_json_deterministic(text: str) -> Optional[Any]:
     
     try:
         return json.loads(cleaned)
-    except json.JSONDecodeError:
+    except Exception:
         pass
 
     # Balance truncated JSON
