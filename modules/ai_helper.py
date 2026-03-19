@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import asyncio
-import json
+import json5 as json
 import re
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Type, TypeVar, Union
 
 import httpx
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, ValidationError
 
 LogFn = Callable[[str, str], Awaitable[None]]
 
@@ -58,7 +58,10 @@ def _extract_json(text: str) -> Any:
                 break
     
     if (cleaned.startswith("{") and cleaned.endswith("}")) or (cleaned.startswith("[") and cleaned.endswith("]")):
-        return json.loads(cleaned)
+        try:
+            return json.loads(cleaned)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Invalid JSON in model response: {e}. Raw: {cleaned[:200]}...") from e
     
     start_obj, start_arr = cleaned.find("{"), cleaned.find("[")
     if start_obj != -1 and (start_arr == -1 or start_obj < start_arr):
@@ -66,11 +69,23 @@ def _extract_json(text: str) -> Any:
     elif start_arr != -1:
         start, end = start_arr, cleaned.rfind("]")
     else:
-        raise ValueError("No JSON object or array found")
+        raise ValueError(f"No JSON object or array found in model response. Raw: {cleaned[:200]}...")
 
     if start != -1 and end != -1 and end > start:
-        return json.loads(cleaned[start : end + 1])
-    raise ValueError("No JSON object or array found")
+        content = cleaned[start : end + 1]
+        try:
+            return json.loads(content)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Invalid JSON found in markers: {e}. Raw: {content[:200]}...") from e
+    raise ValueError(f"No JSON object or array found with valid markers. Raw: {cleaned[:200]}...")
+
+
+def _extract_json_array(text: str) -> List[Any]:
+    """Helper to extract a JSON array from text."""
+    data = _extract_json(text)
+    if not isinstance(data, list):
+        raise ValueError(f"Expected JSON array, but got {type(data).__name__}")
+    return data
 
 
 def _sanitize_json_text(text: str) -> str:
@@ -280,6 +295,8 @@ async def call_llm_with_retry(
                 extracted = _extract_json(text)
             except Exception as e:
                 if attempt == max_retries:
+                    if log:
+                        await log("raw", f"LLM parsing failed after {attempt} attempts. Raw:\n{text}")
                     raise LLMResponseError(
                         f"Failed to extract JSON after all retries: {e}",
                         raw_text=text,
@@ -299,6 +316,9 @@ async def call_llm_with_retry(
                         # Maybe try without 'format: json' or with 'think: False'
                         current_payload["think"] = False
                         continue
+                    
+                    if log:
+                        await log("raw", f"Pydantic validation failed after {attempt} attempts. Raw:\n{text}")
                     raise LLMResponseError(
                         f"Pydantic validation failed: {e}",
                         raw_text=text,
