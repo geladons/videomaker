@@ -9,6 +9,8 @@ from typing import Any, Awaitable, Callable, Dict, List, Optional
 import httpx
 from duckduckgo_search import DDGS
 
+import database
+from modules import llm
 from config import (
     DEFAULT_DIRS,
     OLLAMA_SETTINGS,
@@ -83,6 +85,10 @@ async def download_cc_video(
         "--no-progress",
         "--format",
         "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/bestvideo+bestaudio/best",
+        "--match-filter",
+        "duration < 600",
+        "--download-sections",
+        "*0-60",
         "-o",
         os.path.join(out_dir, "bg_%(id)s.%(ext)s"),
     ]
@@ -508,49 +514,67 @@ async def gather_scene_assets(
     first_video = None
     first_image = None
 
-    # Process scenes SEQUENTIALLY to avoid rate limiting
+    try:
+        cached_assets = await database.get_all_cached_assets()
+    except Exception as e:
+        await log("warn", f"Failed to fetch cached assets: {e}")
+        cached_assets = []
+
     num_scenes = len(scenes)
     for idx, scene in enumerate(scenes, start=1):
         if progress_fn:
-            # Progress within gather_scene_assets is from 0.0 to 1.0
             await progress_fn((idx - 1) / num_scenes)
 
         entry: Dict[str, Optional[str]] = {"video": None, "image": None}
 
-        # Add delay between scenes to avoid YouTube rate limits
         if idx > 1 and request_delay > 0:
-            await log(
-                "info", f"Waiting {scene_delay}s before processing scene {idx}..."
-            )
+            await log("info", f"Waiting {scene_delay}s before processing scene {idx}...")
             await asyncio.sleep(scene_delay)
 
-        # Video download - try multiple queries for better hit rate
         if use_stock_video:
-            queries = []
-            if use_ai:
-                queries = await generate_ai_search_queries(
-                    scene, "video", log, api_url=query_api_url, model=ai_query_model
-                )
-            if not queries:
-                queries = _alternate_queries(scene.get("visual_query", "cinematic background"), fallback_topic=fallback_topic)
-
+            visual_query = scene.get("visual_query", "cinematic background")
             video_path = None
-            for q_idx, query in enumerate(queries):
-                await log("info", f"Searching CC video for scene {idx} (attempt {q_idx+1}): {query}")
-                try:
-                    video_path = await download_cc_video(
-                        query, video_dir, log, scraper_settings=settings
+            
+            # Cache lookup
+            if cached_assets:
+                valid_cache = [a for a in cached_assets if os.path.exists(a["path"])][:10]
+                for asset in valid_cache:
+                    if await llm.evaluate_asset_match(
+                        visual_query, 
+                        asset["description"], 
+                        model=ai_query_model or OLLAMA_SETTINGS["default"]["model"],
+                        options={**OLLAMA_SETTINGS["default"]["params"], **(settings or {})},
+                        api_url=query_api_url,
+                        timeout=60.0,
+                        log=log
+                    ):
+                        video_path = asset["path"]
+                        await log("info", f"Cache hit for scene {idx}: {video_path}")
+                        break
+            
+            # Download fallback
+            if not video_path:
+                queries = []
+                if use_ai:
+                    queries = await generate_ai_search_queries(
+                        scene, "video", log, api_url=query_api_url, model=ai_query_model
                     )
-                except Exception as e:
-                    await log("warn", f"Video search attempt {q_idx+1} failed: {e}")
+                if not queries:
+                    queries = _alternate_queries(visual_query, fallback_topic=fallback_topic)
+
+                for q_idx, query in enumerate(queries):
+                    await log("info", f"Searching CC video for scene {idx} (attempt {q_idx+1}): {query}")
+                    try:
+                        video_path = await download_cc_video(query, video_dir, log, settings)
+                        if video_path:
+                            first_video = first_video or video_path
+                            await database.add_to_cache(video_path, visual_query, query)
+                            break
+                    except Exception as e:
+                        await log("warn", f"Video search attempt {q_idx+1} failed: {e}")
                     
-                if video_path:
-                    if first_video is None:
-                        first_video = video_path
-                    break
-                # Small delay between queries
-                if request_delay > 0:
-                    await asyncio.sleep(request_delay)
+                    if request_delay > 0:
+                        await asyncio.sleep(request_delay)
 
             entry["video"] = video_path
             if not video_path:

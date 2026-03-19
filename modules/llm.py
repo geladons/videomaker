@@ -430,3 +430,53 @@ async def generate_search_queries(
         if log:
             await log("warn", f"AI search query generation failed: {exc}")
         return []
+
+
+async def evaluate_asset_match(
+    visual_query: str,
+    asset_description: str,
+    model: str,
+    options: Dict[str, Any],
+    api_url: str,
+    timeout: float,
+    log: Optional[LogFn] = None,
+) -> bool:
+    """
+    Evaluate if an existing video asset matches a scene's visual requirement using an LLM.
+    Returns True if it's a good match, False otherwise.
+    """
+    prompt = (
+        "You are an AI assistant evaluating if a video asset matches a scene's visual requirement.\n"
+        f"Scene Requirement: {visual_query}\n"
+        f"Video Description: {asset_description}\n\n"
+        "Does the video description reasonably fulfill the scene requirement? "
+        "Respond with 'YES' or 'NO' followed by a brief reason.\n"
+        "If it's a good match, start with 'YES'. If not, start with 'NO'."
+    )
+
+    payload: Dict[str, Any] = {
+        "model": model,
+        "prompt": prompt,
+        "stream": False,
+        "options": options,
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.post(f"{api_url}/api/generate", json=payload)
+            resp.raise_for_status()
+            data = resp.json()
+            
+        raw_text = data.get("response", "") if isinstance(data, dict) else ""
+        # Strip thinking/markdown
+        raw_text = re.sub(r"<think>.*?</think>", "", raw_text, flags=re.DOTALL).strip()
+        raw_text = raw_text.strip().upper()
+        
+        if log:
+            await log("info", f"Asset match evaluation for '{visual_query}' vs '{asset_description}': {raw_text[:60]}...")
+            
+        return raw_text.startswith("YES")
+    except Exception as exc:
+        if log:
+            await log("warn", f"Asset match evaluation failed: {exc}")
+        return False

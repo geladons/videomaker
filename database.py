@@ -40,6 +40,14 @@ CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS assets_cache (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    path TEXT NOT NULL,
+    description TEXT NOT NULL,
+    original_query TEXT,
+    created_at TEXT NOT NULL
+);
 """
 
 
@@ -191,6 +199,25 @@ async def set_setting(key: str, value: Any) -> None:
             (key, payload),
         )
     await _enqueue_write(_write)
+
+
+async def add_to_cache(path: str, description: str, original_query: Optional[str] = None) -> None:
+    now = _utcnow()
+    async def _write(db: aiosqlite.Connection) -> None:
+        await db.execute(
+            "INSERT INTO assets_cache (path, description, original_query, created_at) VALUES (?, ?, ?, ?)",
+            (path, description, original_query, now),
+        )
+    await _enqueue_write(_write)
+
+
+async def get_all_cached_assets() -> List[Dict[str, Any]]:
+    async with _read_connection() as db:
+        await db.execute("PRAGMA busy_timeout=5000;")
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM assets_cache ORDER BY created_at DESC") as cursor:
+            rows = await cursor.fetchall()
+            return [dict(row) for row in rows]
 
 
 async def get_setting(key: str, default: Any = None) -> Any:
