@@ -43,7 +43,10 @@ function renderTaskList(tasks) {
           <div class="task-status text-amber-300">${status}</div>
           <div class="text-sm text-slate-200 mt-1">${task.id}</div>
         </div>
-        ${output ? `<a class="btn-ghost" href="/api/download/${task.id}">Download</a>` : ''}
+        <div class="flex gap-2">
+          ${status === 'Running' ? `<button class="btn-ghost" onclick="cancelTask('${task.id}')">Cancel</button>` : ''}
+          ${output ? `<a class="btn-ghost" href="/api/download/${task.id}">Download</a>` : ''}
+        </div>
       </div>
       <div class="text-xs text-slate-400 mt-2">${escapeHtml(task.prompt || '')}</div>
       <div class="progress-bar mt-3"><div class="progress-fill" style="width:${progress}%"></div></div>
@@ -67,6 +70,7 @@ function renderHistory(tasks) {
           <div class="text-sm text-slate-200 mt-1">${task.id}</div>
         </div>
         <div class="flex gap-2">
+          ${task.status === 'Running' ? `<button class="btn-ghost" onclick="cancelTask('${task.id}')">Cancel</button>` : ''}
           <button class="btn-ghost" data-log="${task.id}">View Logs</button>
           <button class="btn-ghost" data-full-log="${task.id}">View Full Logs</button>
           <a class="btn-ghost" href="/api/logs/${task.id}">Download Logs</a>
@@ -282,7 +286,7 @@ async function initSettings() {
   qs('#top_k').value = params.top_k ?? 40;
   qs('#top_p').value = params.top_p ?? 0.9;
   qs('#repeat_penalty').value = params.repeat_penalty ?? 1.1;
-  qs('#num_predict').value = params.num_predict ?? 1024;
+  qs('#num_predict').value = params.num_predict ?? 4096;
 
   qs('#planner_api_url').value = settings.ollama_planner_api_url || '';
   qs('#planner_timeout').value = settings.ollama_planner_timeout ?? 120;
@@ -294,7 +298,7 @@ async function initSettings() {
   qs('#planner_top_k').value = plannerParams.top_k ?? 40;
   qs('#planner_top_p').value = plannerParams.top_p ?? 0.9;
   qs('#planner_repeat_penalty').value = plannerParams.repeat_penalty ?? 1.05;
-  qs('#planner_num_predict').value = plannerParams.num_predict ?? 512;
+  qs('#planner_num_predict').value = plannerParams.num_predict ?? 2048;
 
   const video = settings.video_settings || {};
   qs('#resolution_landscape').value = video.resolution_landscape || '1280x720';
@@ -402,7 +406,7 @@ async function initSettings() {
         top_k: numOr(qs('#top_k').value, params.top_k ?? 40),
         top_p: numOr(qs('#top_p').value, params.top_p ?? 0.9),
         repeat_penalty: numOr(qs('#repeat_penalty').value, params.repeat_penalty ?? 1.1),
-        num_predict: numOr(qs('#num_predict').value, params.num_predict ?? 1024),
+        num_predict: numOr(qs('#num_predict').value, params.num_predict ?? 4096),
       },
       ollama_planner_api_url: qs('#planner_api_url').value,
       ollama_planner_model: qs('#planner_model').value,
@@ -415,7 +419,7 @@ async function initSettings() {
         top_k: numOr(qs('#planner_top_k').value, plannerParams.top_k ?? 40),
         top_p: numOr(qs('#planner_top_p').value, plannerParams.top_p ?? 0.9),
         repeat_penalty: numOr(qs('#planner_repeat_penalty').value, plannerParams.repeat_penalty ?? 1.05),
-        num_predict: numOr(qs('#planner_num_predict').value, plannerParams.num_predict ?? 512),
+        num_predict: numOr(qs('#planner_num_predict').value, plannerParams.num_predict ?? 2048),
       },
       video_settings: {
         resolution_landscape: qs('#resolution_landscape').value,
@@ -513,3 +517,23 @@ window.addEventListener('DOMContentLoaded', () => {
   initSettings();
   initHistory();
 });
+
+window.cancelTask = async function(taskId) {
+  if(!confirm('Are you sure you want to cancel this task?')) return;
+  try {
+    const res = await fetch(`/api/tasks/${taskId}/cancel`, { method: 'POST' });
+    if(res.ok) {
+      alert('Task cancelled.');
+      if(window.location.pathname.includes('history')) {
+          document.getElementById('refreshHistory').click();
+      } else {
+          document.getElementById('refreshTasks')?.click();
+      }
+    } else {
+      const data = await res.json();
+      alert('Failed to cancel: ' + (data.error || 'Unknown error'));
+    }
+  } catch(e) {
+    console.error(e);
+  }
+};

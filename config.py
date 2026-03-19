@@ -80,7 +80,7 @@ OLLAMA_SETTINGS = {
             "top_k": 40,
             "top_p": 0.9,
             "repeat_penalty": 1.1,
-            "num_predict": 1024,
+            "num_predict": 4096,
         }
     },
     "planner": {
@@ -94,7 +94,7 @@ OLLAMA_SETTINGS = {
             "top_k": 40,
             "top_p": 0.9,
             "repeat_penalty": 1.05,
-            "num_predict": 512,
+            "num_predict": 2048,
         }
     },
     "helper": {
