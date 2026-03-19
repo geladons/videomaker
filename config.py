@@ -125,6 +125,20 @@ OLLAMA_SETTINGS = {
             "repeat_penalty": 1.05,
             "num_predict": 256,
         }
+    },
+    "ai_query": {
+        "model": os.environ.get("OLLAMA_AI_QUERY_MODEL", "qwen3.5:2b"),
+        "timeout": int(os.environ.get("OLLAMA_AI_QUERY_TIMEOUT", "60")),
+        "think": os.environ.get("OLLAMA_AI_QUERY_THINK", "false").lower() in {"1", "true", "yes", "on"},
+        "params": {
+            "num_ctx": 4096,
+            "num_thread": 20,
+            "temperature": 0.2,
+            "top_k": 40,
+            "top_p": 0.9,
+            "repeat_penalty": 1.05,
+            "num_predict": 256,
+        }
     }
 }
 

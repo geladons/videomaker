@@ -278,10 +278,16 @@ async def api_settings() -> JSONResponse:
 
 @app.post("/api/settings")
 async def api_settings_update(payload: Dict[str, Any]) -> JSONResponse:
+    ollama_api_url = payload.get("ollama_api_url", OLLAMA_API_URL)
+    
     # Loop through consolidated Ollama settings
     for key, settings in OLLAMA_SETTINGS.items():
         prefix = f"ollama_{key}_" if key != "default" else "ollama_"
-        await set_setting(f"{prefix}api_url", payload.get(f"{prefix}api_url", OLLAMA_API_URL))
+        
+        # Explicit mapping: ai_query uses primary ollama_api_url if not explicitly overridden
+        default_api_url = ollama_api_url if key == "ai_query" else OLLAMA_API_URL
+        await set_setting(f"{prefix}api_url", payload.get(f"{prefix}api_url", default_api_url))
+        
         await set_setting(f"{prefix}model", payload.get(f"{prefix}model", settings["model"]))
         await set_setting(f"{prefix}params", payload.get(f"{prefix}params", settings["params"]))
         await set_setting(f"{prefix}timeout", payload.get(f"{prefix}timeout", settings["timeout"]))

@@ -501,7 +501,7 @@ async def gather_scene_assets(
     scene_delay = max(5.0, request_delay)  # At least 5 seconds between scenes
 
     # Whether to use AI for query generation
-    use_ai = ai_query_model is not None and ai_query_api_url
+    use_ai = ai_query_model is not None
     query_api_url = ai_query_api_url or OLLAMA_API_URL
 
     # Track first successful assets for fallback
@@ -526,7 +526,11 @@ async def gather_scene_assets(
 
         # Video download - try multiple queries for better hit rate
         if use_stock_video:
-            queries = await generate_ai_search_queries(scene, "video", log)
+            queries = []
+            if use_ai:
+                queries = await generate_ai_search_queries(
+                    scene, "video", log, api_url=query_api_url, model=ai_query_model
+                )
             if not queries:
                 queries = _alternate_queries(scene.get("visual_query", "cinematic background"), fallback_topic=fallback_topic)
 
@@ -554,7 +558,11 @@ async def gather_scene_assets(
 
         # Image download
         if use_images:
-            queries = await generate_ai_search_queries(scene, "image", log)
+            queries = []
+            if use_ai:
+                queries = await generate_ai_search_queries(
+                    scene, "image", log, api_url=query_api_url, model=ai_query_model
+                )
             if not queries:
                 queries = _alternate_queries(scene.get("visual_query", "abstract background"), fallback_topic=fallback_topic)
 

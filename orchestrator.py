@@ -55,10 +55,6 @@ class Orchestrator:
                     await get_setting("voiceover_words_per_sec", DEFAULT_VOICEOVER_WPS)
                 ),
             },
-            "ai_query": {
-                "model": await get_setting("ai_query_model", None),
-                "api_url": await get_setting("ai_query_api_url", OLLAMA_API_URL),
-            },
         }
         # Add all Ollama settings dynamically
         for key, ollama_setting in OLLAMA_SETTINGS.items():
