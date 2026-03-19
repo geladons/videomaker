@@ -17,11 +17,8 @@ def _resolution_for(format_choice: str, settings: Dict[str, str]) -> str:
 
 
 def _escape_ffmpeg_path(path: str) -> str:
-    """
-    Escapes a path for use in FFmpeg filters (e.g., drawtext textfile, ass).
-    FFmpeg filtergraph parser requires escaping of colons and backslashes.
-    """
-    return path.replace("", "").replace(":", "\:").replace("'", "'")
+    """Escapes colons for FFmpeg filtergraph parser."""
+    return path.replace(":", r"\:")
 
 
 def _build_video_filters(
@@ -89,7 +86,7 @@ def _build_ffmpeg_inputs(
     inputs = []
     
     if bg_video:
-        inputs.extend(["-stream_loop", "-1", "-i", bg_video])
+        inputs.extend(["-ss", "15", "-stream_loop", "-1", "-i", bg_video])
     else:
         inputs.extend(["-f", "lavfi", "-i", f"color=c=0x0f172a:s={resolution}:r={fps}"])
 
@@ -158,6 +155,55 @@ def _build_scene_command(
         out_path,
     ]
     return cmd
+
+
+def _build_transition_filters(
+    scene_files: List[str],
+    durations: List[float],
+    transition_dur: float = 0.5,
+) -> Tuple[str, str, str]:
+    """
+    Builds a filter graph for xfade (video) and acrossfade (audio) between multiple scenes.
+    Returns: (filter_complex_string, final_video_label, final_audio_label)
+    """
+    if len(scene_files) < 2:
+        return "", "[0:v]", "[0:a]"
+
+    # Safety check: ensure transition is not longer than half of the shortest scene
+    min_dur = min(durations)
+    actual_trans_dur = min(transition_dur, min_dur / 2.1)
+
+    v_filters = []
+    a_filters = []
+    
+    # Video xfade chain
+    # [0:v][1:v]xfade=transition=fade:duration=0.5:offset=d0-0.5[v1];
+    # [v1][2:v]xfade=transition=fade:duration=0.5:offset=d0+d1-1.0[v2];
+    current_v_label = "[0:v]"
+    cumulative_offset = durations[0]
+    
+    for i in range(1, len(scene_files)):
+        next_v_label = f"[v{i}]"
+        offset = round(cumulative_offset - actual_trans_dur, 3)
+        v_filters.append(
+            f"{current_v_label}[{i}:v]xfade=transition=fade:duration={actual_trans_dur}:offset={offset}{next_v_label}"
+        )
+        current_v_label = next_v_label
+        cumulative_offset += durations[i] - actual_trans_dur
+
+    # Audio acrossfade chain
+    # [0:a][1:a]acrossfade=d=0.5[a1];
+    # [a1][2:a]acrossfade=d=0.5[a2];
+    current_a_label = "[0:a]"
+    for i in range(1, len(scene_files)):
+        next_a_label = f"[a{i}]"
+        a_filters.append(
+            f"{current_a_label}[{i}:a]acrossfade=d={actual_trans_dur}{next_a_label}"
+        )
+        current_a_label = next_a_label
+
+    full_filter = ";".join(v_filters + a_filters)
+    return full_filter, current_v_label, current_a_label
 
 
 async def compose_video(
@@ -229,33 +275,40 @@ async def compose_video(
             if text_file and os.path.exists(text_file):
                 os.remove(text_file)
 
-    concat_list = os.path.join(scene_dir, "concat.txt")
-    with open(concat_list, "w", encoding="utf-8") as f:
-        for path in scene_files:
-            # Escape single quotes in path for FFmpeg concat file format
-            safe_path = path.replace("'", "''")
-            f.write(f"file '{safe_path}'\n")
+    # Concatenate scenes with transitions
+    await log("info", f"Concatenating {len(scene_files)} scenes with transitions")
+    durations = [float(s.get("duration", 4)) for s in scenes]
+    
+    transition_filter, video_map, audio_map = _build_transition_filters(
+        scene_files, durations
+    )
 
     concat_out = os.path.join(workspace, "concat.mp4")
-    concat_cmd = [
-        "ffmpeg",
-        "-y",
-        "-f",
-        "concat",
-        "-safe",
-        "0",
-        "-i",
-        concat_list,
-        "-c:v",
-        "copy",
-        "-c:a",
-        "copy",
-        concat_out,
-    ]
-    await log("info", "Concatenating scenes")
+    if len(scene_files) > 1:
+        concat_cmd = ["ffmpeg", "-y"]
+        for f in scene_files:
+            concat_cmd.extend(["-i", f])
+            
+        concat_cmd.extend([
+            "-filter_complex", transition_filter,
+            "-map", video_map,
+            "-map", audio_map,
+            "-c:v", "libx264",
+            "-preset", "veryfast",
+            "-c:a", "aac",
+            concat_out,
+        ])
+    else:
+        # Just copy if there's only one scene
+        concat_cmd = [
+            "ffmpeg", "-y", "-i", scene_files[0],
+            "-c", "copy",
+            concat_out
+        ]
+
     code = await run_command(concat_cmd, log=log)
     if code != 0:
-        raise RuntimeError("ffmpeg concat failed")
+        raise RuntimeError("ffmpeg concat/transition failed")
 
     final_input = concat_out
     mix_out = os.path.join(workspace, "mix.mp4")
