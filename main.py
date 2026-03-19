@@ -266,6 +266,9 @@ async def api_settings() -> JSONResponse:
     helper_models = await _fetch_models(helper_api_url)
     vision_models = await _fetch_models(vision_api_url)
 
+    ai_query_api_url = settings.get("ollama_ai_query_api_url", OLLAMA_API_URL)
+    ai_query_models = await _fetch_models(ai_query_api_url)
+
     return JSONResponse(
         {
             "settings": settings,
@@ -273,6 +276,7 @@ async def api_settings() -> JSONResponse:
             "planner_models": planner_models,
             "helper_models": helper_models,
             "vision_models": vision_models,
+            "ai_query_models": ai_query_models,
         }
     )
 

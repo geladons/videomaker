@@ -349,6 +349,20 @@ async function initSettings() {
   populateSelect(qs('#helper_model'), data.helper_models || [], settings.ollama_helper_model);
   populateSelect(qs('#vision_model'), data.vision_models || [], settings.ollama_vision_model);
 
+  // AI Query settings
+  qs('#ai_query_api_url').value = settings.ollama_ai_query_api_url || '';
+  qs('#ai_query_timeout').value = settings.ollama_ai_query_timeout ?? 60;
+  qs('#ai_query_think').checked = settings.ollama_ai_query_think ?? false;
+  const aiQueryParams = settings.ollama_ai_query_params || {};
+  qs('#ai_query_num_ctx').value = aiQueryParams.num_ctx ?? 4096;
+  qs('#ai_query_num_thread').value = aiQueryParams.num_thread ?? 20;
+  qs('#ai_query_temperature').value = aiQueryParams.temperature ?? 0.2;
+  qs('#ai_query_top_k').value = aiQueryParams.top_k ?? 40;
+  qs('#ai_query_top_p').value = aiQueryParams.top_p ?? 0.9;
+  qs('#ai_query_repeat_penalty').value = aiQueryParams.repeat_penalty ?? 1.05;
+  qs('#ai_query_num_predict').value = aiQueryParams.num_predict ?? 256;
+  populateSelect(qs('#ai_query_model'), data.ai_query_models || [], settings.ollama_ai_query_model);
+
   const wireRefresh = (apiInputId, refreshBtnId, selectId, currentValue) => {
     const apiInput = qs(apiInputId);
     const refreshBtn = qs(refreshBtnId);
@@ -370,6 +384,7 @@ async function initSettings() {
   wireRefresh('#planner_api_url', '#refreshPlannerModels', '#planner_model', settings.ollama_planner_model);
   wireRefresh('#helper_api_url', '#refreshHelperModels', '#helper_model', settings.ollama_helper_model);
   wireRefresh('#vision_api_url', '#refreshVisionModels', '#vision_model', settings.ollama_vision_model);
+  wireRefresh('#ai_query_api_url', '#refreshAiQueryModels', '#ai_query_model', settings.ollama_ai_query_model);
 
   const pipelineDefaults = settings.pipeline_defaults || {};
   const defaultAddMusic = qs('#default_add_music');
@@ -391,6 +406,9 @@ async function initSettings() {
   qs('#scraper_sleep_max').value = scraper.yt_dlp_sleep_max ?? 3.0;
   qs('#scraper_search_count').value = scraper.yt_dlp_search_count ?? 8;
   qs('#scraper_image_delay').value = scraper.image_delay_sec ?? 0.6;
+  qs('#yt_dlp_duration_filter').value = scraper.yt_dlp_duration_filter ?? 300;
+  qs('#yt_dlp_download_section').value = scraper.yt_dlp_download_section ?? 60;
+  qs('#video_seek_offset').value = video.video_seek_offset ?? 15;
 
   saveBtn.addEventListener('click', async () => {
     const payload = {
@@ -434,6 +452,7 @@ async function initSettings() {
         subtitle_position: qs('#subtitle_position').value,
         subtitle_margin_x: numOr(qs('#subtitle_margin_x').value, video.subtitle_margin_x ?? 60),
         subtitle_margin_y: numOr(qs('#subtitle_margin_y').value, video.subtitle_margin_y ?? 60),
+        video_seek_offset: numOr(qs('#video_seek_offset').value, video.video_seek_offset ?? 15),
       },
       tts_engine: qs('#tts_engine').value,
       coqui_model: qs('#coqui_model').value,
@@ -468,6 +487,19 @@ async function initSettings() {
         repeat_penalty: numOr(qs('#vision_repeat_penalty').value, visionParams.repeat_penalty ?? 1.05),
         num_predict: numOr(qs('#vision_num_predict').value, visionParams.num_predict ?? 256),
       },
+      ollama_ai_query_api_url: qs('#ai_query_api_url').value,
+      ollama_ai_query_model: qs('#ai_query_model').value,
+      ollama_ai_query_timeout: numOr(qs('#ai_query_timeout').value, settings.ollama_ai_query_timeout ?? 60),
+      ollama_ai_query_think: qs('#ai_query_think').checked,
+      ollama_ai_query_params: {
+        num_ctx: numOr(qs('#ai_query_num_ctx').value, aiQueryParams.num_ctx ?? 4096),
+        num_thread: numOr(qs('#ai_query_num_thread').value, aiQueryParams.num_thread ?? 20),
+        temperature: numOr(qs('#ai_query_temperature').value, aiQueryParams.temperature ?? 0.2),
+        top_k: numOr(qs('#ai_query_top_k').value, aiQueryParams.top_k ?? 40),
+        top_p: numOr(qs('#ai_query_top_p').value, aiQueryParams.top_p ?? 0.9),
+        repeat_penalty: numOr(qs('#ai_query_repeat_penalty').value, aiQueryParams.repeat_penalty ?? 1.05),
+        num_predict: numOr(qs('#ai_query_num_predict').value, aiQueryParams.num_predict ?? 256),
+      },
       pipeline_defaults: {
         add_music: qs('#default_add_music')?.checked ?? true,
         add_greeting: qs('#default_add_greeting')?.checked ?? false,
@@ -482,6 +514,8 @@ async function initSettings() {
         yt_dlp_sleep_max: numOr(qs('#scraper_sleep_max').value, scraper.yt_dlp_sleep_max ?? 3.0),
         yt_dlp_search_count: numOr(qs('#scraper_search_count').value, scraper.yt_dlp_search_count ?? 8),
         image_delay_sec: numOr(qs('#scraper_image_delay').value, scraper.image_delay_sec ?? 0.6),
+        yt_dlp_duration_filter: numOr(qs('#yt_dlp_duration_filter').value, scraper.yt_dlp_duration_filter ?? 300),
+        yt_dlp_download_section: numOr(qs('#yt_dlp_download_section').value, scraper.yt_dlp_download_section ?? 60),
       },
     };
 

@@ -82,11 +82,12 @@ def _build_ffmpeg_inputs(
     resolution: str,
     fps: int,
     duration: float,
+    seek_offset: int = 15,
 ) -> Tuple[List[str], str, int]:
     inputs = []
     
     if bg_video:
-        inputs.extend(["-ss", "15", "-stream_loop", "-1", "-i", bg_video])
+        inputs.extend(["-ss", str(seek_offset), "-stream_loop", "-1", "-i", bg_video])
     else:
         inputs.extend(["-f", "lavfi", "-i", f"color=c=0x0f172a:s={resolution}:r={fps}"])
 
@@ -98,10 +99,10 @@ def _build_ffmpeg_inputs(
 
     if voiceover and os.path.exists(voiceover):
         inputs.extend(["-i", voiceover])
-        audio_source = f"{input_offset-1}:a"
+        audio_source = f"{input_offset}:a"
     else:
         inputs.extend(["-f", "lavfi", "-i", f"anullsrc=channel_layout=stereo:sample_rate=44100:d={duration}"])
-        audio_source = f"{input_offset-1}:a"
+        audio_source = f"{input_offset}:a"
         
     return inputs, audio_source, input_offset
 
@@ -117,11 +118,12 @@ def _build_scene_command(
     fps: int,
     font_name: str,
     font_size: int,
+    seek_offset: int = 15,
 ) -> List[str]:
     width, height = map(int, resolution.split("x"))
     
     inputs, audio_source, input_offset = _build_ffmpeg_inputs(
-        bg_video, overlay_image, voiceover, resolution, fps, duration
+        bg_video, overlay_image, voiceover, resolution, fps, duration, seek_offset
     )
     
     filter_complex, video_map = _build_video_filters(
@@ -225,6 +227,7 @@ async def compose_video(
 
     video_settings = video_settings or DEFAULT_VIDEO
     resolution = _resolution_for(format_choice, video_settings)
+    seek_offset = int(video_settings.get("video_seek_offset", DEFAULT_VIDEO["video_seek_offset"]))
 
     scene_files: List[str] = []
     for idx, scene in enumerate(scenes, start=1):
@@ -265,6 +268,7 @@ async def compose_video(
                 fps,
                 font_name,
                 font_size,
+                seek_offset,
             )
             await log("info", f"Rendering scene {idx}/{len(scenes)}")
             code = await run_command(cmd, log=log)

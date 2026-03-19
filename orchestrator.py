@@ -417,29 +417,42 @@ class Orchestrator:
                 queries = [
                     base_query,
                     f"{fallback_topic} background music" if fallback_topic else None,
-                    "ambient background music",
                     "cinematic music",
                 ]
+                # Limit to 2 attempts max to avoid wasting time
+                max_music_attempts = 2
+                attempt_count = 0
                 for query in [q for q in queries if q]:
+                    if attempt_count >= max_music_attempts:
+                        await self._log(task_id, "warn", f"Reached max music download attempts ({max_music_attempts}), continuing without music")
+                        break
+                    attempt_count += 1
+                    
                     # Defensive check: recreate dir if disappeared
                     if not os.path.exists(music_dir):
                         await self._log(task_id, "warn", f"Music directory missing, recreating: {music_dir}")
                         os.makedirs(music_dir, exist_ok=True)
                         
                     await self._log(
-                        task_id, "info", f"Trying to download music: {query}"
+                        task_id, "info", f"Trying to download music (attempt {attempt_count}/{max_music_attempts}): {query}"
                     )
                     try:
-                        music_path = await scraper.download_cc_audio(
-                            query,
-                            music_dir,
-                            lambda lvl, msg: self._log(task_id, lvl, msg),
-                            scraper_settings=cfg["scraper"],
-                            mood=timeline.get("music_mood", "cinematic"),
+                        # Wrap in timeout to avoid hanging
+                        music_path = await asyncio.wait_for(
+                            scraper.download_cc_audio(
+                                query,
+                                music_dir,
+                                lambda lvl, msg: self._log(task_id, lvl, msg),
+                                scraper_settings=cfg["scraper"],
+                                mood=timeline.get("music_mood", "cinematic"),
+                            ),
+                            timeout=120.0,  # 2 minute timeout per attempt
                         )
                         if music_path and os.path.exists(music_path):
                             await self._log(task_id, "info", f"Successfully obtained music: {os.path.basename(music_path)}")
                             break
+                    except asyncio.TimeoutError:
+                        await self._log(task_id, "warn", f"Music download timed out after 120s for query: {query}")
                     except Exception as e:
                         await self._log(task_id, "error", f"Music download attempt failed for query '{query}': {e}")
 

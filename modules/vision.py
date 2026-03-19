@@ -67,21 +67,42 @@ async def analyze_image(
         "options": options,
     }
 
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        resp = await client.post(f"{api_url}/api/generate", json=payload)
-        resp.raise_for_status()
-        data = resp.json()
-        if isinstance(data, dict) and data.get("error"):
-            raise ValueError(str(data.get("error")))
-        text = data.get("response", "") if isinstance(data, dict) else ""
-
-    if not text and log:
-        await log("error", "Vision model returned empty response")
-
     try:
-        return _extract_json(text)
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.post(f"{api_url}/api/generate", json=payload)
+            resp.raise_for_status()
+            data = resp.json()
+            if isinstance(data, dict) and data.get("error"):
+                raise ValueError(str(data.get("error")))
+            text = data.get("response", "") if isinstance(data, dict) else ""
+    except httpx.TimeoutException:
+        if log:
+            await log("warn", f"Vision analysis timed out after {timeout}s for {image_path}")
+        return {"caption": "", "tags": []}
+    except httpx.HTTPStatusError as e:
+        if log:
+            await log("warn", f"Vision API returned {e.response.status_code} for {image_path}")
+        return {"caption": "", "tags": []}
     except Exception as e:
         if log:
-            await log("raw", f"Vision parsing failed. Raw: {text}")
-            await log("error", f"Vision parsing failed: {e}")
-        raise ValueError(f"Failed to parse vision response: {e}") from e
+            await log("warn", f"Vision analysis failed: {e}")
+        return {"caption": "", "tags": []}
+
+    if not text:
+        if log:
+            await log("warn", "Vision model returned empty response")
+        return {"caption": "", "tags": []}
+
+    try:
+        result = _extract_json(text)
+        # Validate result has expected keys
+        if not isinstance(result, dict):
+            return {"caption": "", "tags": []}
+        return {
+            "caption": str(result.get("caption", "")),
+            "tags": result.get("tags", []) if isinstance(result.get("tags"), list) else [],
+        }
+    except Exception as e:
+        if log:
+            await log("warn", f"Vision parsing failed: {e}")
+        return {"caption": "", "tags": []}

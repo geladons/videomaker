@@ -231,7 +231,11 @@ async def _generate_coqui(
             )
             _coqui_cache[model_name] = tts
         except Exception as exc:
-            await log("error", f"Failed to load Coqui model {model_name}: {exc}")
+            error_msg = str(exc).lower()
+            if "eof" in error_msg or "download" in error_msg or "connection" in error_msg:
+                await log("warn", f"Coqui model download/load failed ({exc}). Falling back to Piper.")
+            else:
+                await log("error", f"Failed to load Coqui model {model_name}: {exc}")
             return await generate_voiceovers(
                 texts,
                 out_dir,

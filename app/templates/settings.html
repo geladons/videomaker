@@ -267,6 +267,62 @@
       </div>
 
       <div>
+        <h2 id="ai_query" class="text-xl font-semibold mb-4">AI Search Query Generator</h2>
+        <p class="text-sm text-slate-400 mb-4">Used to generate smart search queries for finding stock videos and images.</p>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="label">API URL</label>
+            <input id="ai_query_api_url" class="input" />
+          </div>
+          <div>
+            <label class="label">Model</label>
+            <div class="flex gap-2">
+              <select id="ai_query_model" class="input"></select>
+              <button id="refreshAiQueryModels" class="btn-ghost">Refresh</button>
+            </div>
+          </div>
+          <div>
+            <label class="label">Timeout (sec)</label>
+            <input id="ai_query_timeout" type="number" class="input" />
+          </div>
+          <label class="toggle md:col-span-2">
+            <input id="ai_query_think" type="checkbox" />
+            <span>Enable Reasoning Output (think)</span>
+          </label>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+          <div>
+            <label class="label">Context (num_ctx)</label>
+            <input id="ai_query_num_ctx" type="number" class="input" />
+          </div>
+          <div>
+            <label class="label">Threads (num_thread)</label>
+            <input id="ai_query_num_thread" type="number" class="input" />
+          </div>
+          <div>
+            <label class="label">Temperature (temperature)</label>
+            <input id="ai_query_temperature" type="number" step="0.1" class="input" />
+          </div>
+          <div>
+            <label class="label">Top K (top_k)</label>
+            <input id="ai_query_top_k" type="number" class="input" />
+          </div>
+          <div>
+            <label class="label">Top P (top_p)</label>
+            <input id="ai_query_top_p" type="number" step="0.05" class="input" />
+          </div>
+          <div>
+            <label class="label">Repeat Penalty (repeat_penalty)</label>
+            <input id="ai_query_repeat_penalty" type="number" step="0.05" class="input" />
+          </div>
+          <div>
+            <label class="label">Num Predict (num_predict)</label>
+            <input id="ai_query_num_predict" type="number" class="input" />
+          </div>
+        </div>
+      </div>
+
+      <div>
         <h2 id="video" class="text-xl font-semibold mb-4">Video Defaults</h2>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
@@ -418,6 +474,18 @@
           <div>
             <label class="label">Image Delay (sec)</label>
             <input id="scraper_image_delay" type="number" step="0.1" class="input" />
+          </div>
+          <div>
+            <label class="label">Max Video Duration (sec)</label>
+            <input id="yt_dlp_duration_filter" type="number" class="input" placeholder="300" />
+          </div>
+          <div>
+            <label class="label">Download Section (sec)</label>
+            <input id="yt_dlp_download_section" type="number" class="input" placeholder="60" />
+          </div>
+          <div>
+            <label class="label">Video Seek Offset (sec)</label>
+            <input id="video_seek_offset" type="number" class="input" placeholder="15" />
           </div>
         </div>
       </div>

@@ -22,12 +22,17 @@ from modules.utils import ensure_dir, run_command, clean_and_tokenize
 LogFn = Callable[[str, str], Awaitable[None]]
 
 
-SCRAPER_CONSTRAINTS = [
-    "--match-filter",
-    "duration < 300",
-    "--download-sections",
-    "*0-60",
-]
+def _build_scraper_constraints(settings: Optional[Dict[str, Any]] = None) -> List[str]:
+    """Build yt-dlp constraints from settings."""
+    settings = settings or {}
+    duration_filter = int(settings.get("yt_dlp_duration_filter", 300))
+    download_section = int(settings.get("yt_dlp_download_section", 60))
+    return [
+        "--match-filter",
+        f"duration < {duration_filter}",
+        "--download-sections",
+        f"*0-{download_section}",
+    ]
 
 async def _latest_file(
     directory: str, exts: List[str], min_mtime: Optional[float] = None
@@ -83,6 +88,7 @@ async def download_cc_video(
         sleep_max = sleep_min
     delay_sec = float(settings.get("request_delay_sec", 0.0))
     safe_query = _limit_query(query)
+    constraints = _build_scraper_constraints(settings)
     base_cmd = [
         "yt-dlp",
         f"ytsearch{search_count}:{safe_query} creative commons",
@@ -91,7 +97,7 @@ async def download_cc_video(
         "--no-progress",
         "--format",
         "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/bestvideo+bestaudio/best",
-        *SCRAPER_CONSTRAINTS,
+        *constraints,
         "-o",
         os.path.join(out_dir, "bg_%(id)s.%(ext)s"),
     ]
@@ -150,6 +156,7 @@ async def download_cc_audio(
     if not safe_query:
         safe_query = f"{mood} music"
 
+    constraints = _build_scraper_constraints(settings)
     base_cmd = [
         "yt-dlp",
         f"ytsearch{search_count}:{safe_query} creative commons",
@@ -161,7 +168,7 @@ async def download_cc_audio(
         "mp3",
         "--audio-quality",
         "0",
-        *SCRAPER_CONSTRAINTS,
+        *constraints,
         "-o",
         os.path.join(out_dir, "music_%(id)s.%(ext)s"),
     ]
@@ -294,6 +301,7 @@ async def _download_audio_fallback(
             simple_query = f"{mood} music"
 
         # Try yt-dlp with simpler settings
+        constraints = _build_scraper_constraints(settings)
         cmd = [
             "yt-dlp",
             f"ytsearch3:{simple_query}",
@@ -305,7 +313,7 @@ async def _download_audio_fallback(
             "mp3",
             "--audio-quality",
             "0",  # Best quality
-            *SCRAPER_CONSTRAINTS,
+            *constraints,
             "-o",
             os.path.join(out_dir, "music_%(id)s.%(ext)s"),
             "--no-check-certificate",
@@ -463,7 +471,16 @@ def _alternate_queries(query: str, fallback_topic: Optional[str] = None) -> List
         simplified_topic = _simplify_query(fallback_topic)
         if simplified_topic:
             candidates.append(simplified_topic)
+            # Add topic-based specific fallbacks
+            topic_words = simplified_topic.split()
+            if len(topic_words) >= 2:
+                candidates.append(f"{topic_words[0]} {topic_words[-1]}")
+            candidates.append(f"{simplified_topic} screenshot")
+            candidates.append(f"{simplified_topic} gameplay")
 
+    # Progressive fallbacks - more specific first, then generic
+    candidates.append("nature landscape")
+    candidates.append("city skyline")
     candidates.append("abstract background")
     candidates.append("cinematic background")
 
