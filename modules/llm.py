@@ -387,7 +387,7 @@ async def generate_search_queries(
     model: str,
     options: Dict[str, Any],
     api_url: str,
-    timeout: float,
+    timeout: float = 900.0,
     request_delay: float = 0.5,
     log: Optional[LogFn] = None,
 ) -> List[str]:
@@ -423,40 +423,75 @@ async def generate_search_queries(
         "options": options,
     }
 
-    try:
-        if request_delay > 0:
-            await asyncio.sleep(request_delay)
-            
-        if log:
-            await log("raw", f"LLM Search queries prompt:\n{payload.get('prompt', '')}")
+    max_retries = 3
+    last_error = None
 
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            resp = await client.post(f"{api_url}/api/generate", json=payload)
-            resp.raise_for_status()
-            data = resp.json()
-            
-        raw_text = data.get("response", "") if isinstance(data, dict) else ""
-        # Strip thinking/markdown
-        raw_text = re.sub(r"<think>.*?</think>", "", raw_text, flags=re.DOTALL).strip()
-        raw_text = re.sub(r"```.*?```", "", raw_text, flags=re.DOTALL).strip()
-        
-        # Split and clean
-        lines = [l.strip() for l in re.split(r"[,|\n]", raw_text) if l.strip()]
-        cleaned = [re.sub(r"^[\-\*\d\.\s]+", "", l).strip() for l in lines]
-        keywords = [k for k in cleaned if k][:5]
-        
-        if not keywords and base_query:
-            from modules.utils import clean_and_tokenize
-            keywords = clean_and_tokenize(base_query, max_words=4).split()
+    for attempt in range(1, max_retries + 1):
+        try:
+            if request_delay > 0:
+                await asyncio.sleep(request_delay)
+                
+            if log:
+                await log("raw", f"LLM Search queries prompt (attempt {attempt}):\n{payload.get('prompt', '')}")
 
-        if log and keywords:
-            await log("info", f"Generated {asset_type} keywords: {', '.join(keywords)}")
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                resp = await client.post(f"{api_url}/api/generate", json=payload)
+                resp.raise_for_status()
+                data = resp.json()
+                
+            raw_text = data.get("response", "") if isinstance(data, dict) else ""
             
-        return keywords
-    except Exception as exc:
-        if log:
-            await log("warn", f"AI search query generation failed: {exc}")
-        return []
+            # Check for empty response BEFORE processing
+            if not raw_text or not raw_text.strip():
+                if log:
+                    await log("warn", f"AI returned empty response for {asset_type} search queries (attempt {attempt})")
+                if attempt < max_retries:
+                    await asyncio.sleep(2 ** attempt * 0.5)
+                    continue
+                return []
+            
+            # Strip thinking/markdown
+            raw_text = re.sub(r"", "", raw_text, flags=re.DOTALL).strip()
+            raw_text = re.sub(r"```.*?```", "", raw_text, flags=re.DOTALL).strip()
+            
+            # Split and clean
+            lines = [l.strip() for l in re.split(r"[,|\n]", raw_text) if l.strip()]
+            cleaned = [re.sub(r"^[\-\*\d\.\s]+", "", l).strip() for l in lines]
+            keywords = [k for k in cleaned if k][:5]
+            
+            if not keywords:
+                if log:
+                    await log("warn", f"AI returned unparseable response for {asset_type} (attempt {attempt}): '{raw_text[:100]}'")
+                if attempt < max_retries:
+                    await asyncio.sleep(2 ** attempt * 0.5)
+                    continue
+                # Fallback to simple tokenization
+                if base_query:
+                    from modules.utils import clean_and_tokenize
+                    keywords = clean_and_tokenize(base_query, max_words=4).split()
+                return keywords
+
+            if log:
+                await log("info", f"Generated {asset_type} keywords: {', '.join(keywords)}")
+                
+            return keywords
+            
+        except Exception as exc:
+            last_error = exc
+            error_type = type(exc).__name__
+            error_msg = str(exc) if str(exc) else "(empty exception)"
+            if log:
+                await log("warn", f"AI search query generation failed (attempt {attempt}/{max_retries}): {error_type}: {error_msg}")
+            if attempt < max_retries:
+                await asyncio.sleep(2 ** attempt * 0.5)
+                continue
+
+    # All retries exhausted
+    if log and last_error:
+        error_type = type(last_error).__name__
+        error_msg = str(last_error) if str(last_error) else "(empty exception)"
+        await log("error", f"AI search query generation failed after {max_retries} attempts: {error_type}: {error_msg}")
+    return []
 
 
 async def evaluate_asset_match(

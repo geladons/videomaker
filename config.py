@@ -71,25 +71,25 @@ DEFAULT_OLLAMA_REQUEST_DELAY = float(os.environ.get("OLLAMA_REQUEST_DELAY", "0.8
 OLLAMA_SETTINGS = {
     "default": {
         "model": os.environ.get("OLLAMA_MODEL", "qwen3.5:9b"),
-        "timeout": int(os.environ.get("OLLAMA_TIMEOUT", "180")),
+        "timeout": int(os.environ.get("OLLAMA_TIMEOUT", "900")),
         "think": os.environ.get("OLLAMA_THINK", "false").lower() in {"1", "true", "yes", "on"},
         "params": {
             "num_ctx": 4096,
-            "num_thread": 20,
+            "num_thread": 10,
             "temperature": 0.7,
             "top_k": 40,
             "top_p": 0.9,
             "repeat_penalty": 1.1,
-            "num_predict": 4096,
+            "num_predict": 2048,
         }
     },
     "planner": {
         "model": os.environ.get("OLLAMA_PLANNER_MODEL", "llama3.2:3b"),
-        "timeout": int(os.environ.get("OLLAMA_PLANNER_TIMEOUT", "120")),
+        "timeout": int(os.environ.get("OLLAMA_PLANNER_TIMEOUT", "900")),
         "think": os.environ.get("OLLAMA_PLANNER_THINK", "false").lower() in {"1", "true", "yes", "on"},
         "params": {
             "num_ctx": 4096,
-            "num_thread": 20,
+            "num_thread": 10,
             "temperature": 0.3,
             "top_k": 40,
             "top_p": 0.9,
@@ -99,63 +99,63 @@ OLLAMA_SETTINGS = {
     },
     "helper": {
         "model": os.environ.get("OLLAMA_HELPER_MODEL", "qwen3.5:2b"),
-        "timeout": int(os.environ.get("OLLAMA_HELPER_TIMEOUT", "120")),
+        "timeout": int(os.environ.get("OLLAMA_HELPER_TIMEOUT", "900")),
         "think": os.environ.get("OLLAMA_HELPER_THINK", "false").lower() in {"1", "true", "yes", "on"},
         "params": {
             "num_ctx": 4096,
-            "num_thread": 20,
+            "num_thread": 10,
             "temperature": 0.2,
             "top_k": 40,
             "top_p": 0.9,
             "repeat_penalty": 1.05,
-            "num_predict": 512,
+            "num_predict": 2048,
         }
     },
     "vision": {
         "enabled": os.environ.get("OLLAMA_VISION_ENABLED", "false").lower() in {"1", "true", "yes", "on"},
         "model": os.environ.get("OLLAMA_VISION_MODEL", "qwen3-vl:2b"),
-        "timeout": int(os.environ.get("OLLAMA_VISION_TIMEOUT", "120")),
+        "timeout": int(os.environ.get("OLLAMA_VISION_TIMEOUT", "900")),
         "think": os.environ.get("OLLAMA_VISION_THINK", "false").lower() in {"1", "true", "yes", "on"},
         "params": {
             "num_ctx": 4096,
-            "num_thread": 20,
+            "num_thread": 10,
             "temperature": 0.2,
             "top_k": 40,
             "top_p": 0.9,
             "repeat_penalty": 1.05,
-            "num_predict": 256,
+            "num_predict": 2048,
         }
     },
     "ai_query": {
-        "model": os.environ.get("OLLAMA_AI_QUERY_MODEL", "qwen3.5:2b"),
-        "timeout": int(os.environ.get("OLLAMA_AI_QUERY_TIMEOUT", "60")),
+        "model": os.environ.get("OLLAMA_AI_QUERY_MODEL", "qwen3.5:4b"),
+        "timeout": int(os.environ.get("OLLAMA_AI_QUERY_TIMEOUT", "900")),
         "think": os.environ.get("OLLAMA_AI_QUERY_THINK", "false").lower() in {"1", "true", "yes", "on"},
         "params": {
             "num_ctx": 4096,
-            "num_thread": 20,
+            "num_thread": 10,
             "temperature": 0.2,
             "top_k": 40,
             "top_p": 0.9,
             "repeat_penalty": 1.05,
-            "num_predict": 256,
+            "num_predict": 2048,
         }
     }
 }
 
-DEFAULT_VOICEOVER_WPS = float(os.environ.get("VOICEOVER_WORDS_PER_SEC", "2.0"))
+DEFAULT_VOICEOVER_WPS = float(os.environ.get("VOICEOVER_WORDS_PER_SEC", "1.5"))
 
 DEFAULT_SCRAPER = {
-    "request_delay_sec": float(os.environ.get("SCRAPER_REQUEST_DELAY", "1.2")),
-    "yt_dlp_sleep_min": float(os.environ.get("SCRAPER_YTDLP_SLEEP_MIN", "1.0")),
-    "yt_dlp_sleep_max": float(os.environ.get("SCRAPER_YTDLP_SLEEP_MAX", "3.0")),
-    "yt_dlp_search_count": int(os.environ.get("SCRAPER_YTDLP_SEARCH_COUNT", "8")),
-    "image_delay_sec": float(os.environ.get("SCRAPER_IMAGE_DELAY", "0.6")),
-    "yt_dlp_duration_filter": int(os.environ.get("SCRAPER_YTDLP_DURATION_FILTER", "180")),
-    "yt_dlp_download_section": int(os.environ.get("SCRAPER_YTDLP_DOWNLOAD_SECTION", "60")),
+    "request_delay_sec": float(os.environ.get("SCRAPER_REQUEST_DELAY", "2")),
+    "yt_dlp_sleep_min": float(os.environ.get("SCRAPER_YTDLP_SLEEP_MIN", "2")),
+    "yt_dlp_sleep_max": float(os.environ.get("SCRAPER_YTDLP_SLEEP_MAX", "3")),
+    "yt_dlp_search_count": int(os.environ.get("SCRAPER_YTDLP_SEARCH_COUNT", "50")),
+    "image_delay_sec": float(os.environ.get("SCRAPER_IMAGE_DELAY", "1.5")),
+    "yt_dlp_duration_filter": int(os.environ.get("SCRAPER_YTDLP_DURATION_FILTER", "600")),
+    "yt_dlp_download_section": int(os.environ.get("SCRAPER_YTDLP_DOWNLOAD_SECTION", "120")),
 }
 
 DEFAULT_VIDEO = {
-    "resolution_landscape": "1280x720",
+    "resolution_landscape": "1920x1080",
     "resolution_portrait": "720x1280",
     "fps": 30,
     "font_name": "Inter",
@@ -169,7 +169,7 @@ DEFAULT_VIDEO = {
     "subtitle_position": "bottom",
     "subtitle_margin_x": 60,
     "subtitle_margin_y": 60,
-    "video_seek_offset": 15,
+    "video_seek_offset": 30,
 }
 
 DEFAULT_PIPELINE = {

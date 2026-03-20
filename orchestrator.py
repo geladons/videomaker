@@ -276,6 +276,7 @@ class Orchestrator:
                     scraper_settings=cfg["scraper"],
                     ai_query_model=cfg["ai_query"]["model"],
                     ai_query_api_url=cfg["ai_query"]["api_url"],
+                    ai_query_timeout=float(cfg["ai_query"].get("timeout", 900)),
                     progress_fn=asset_progress,
                 )
             except Exception as e:

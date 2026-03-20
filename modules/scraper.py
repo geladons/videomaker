@@ -107,6 +107,11 @@ async def download_cc_video(
         *constraints,
         "-o",
         os.path.join(out_dir, "bg_%(id)s.%(ext)s"),
+        "--no-check-certificate",
+        "--prefer-insecure",
+        "--force-ipv4",
+        "--fragment-retries", "3",
+        "--retries", "3",
     ]
     if sleep_min > 0:
         base_cmd += ["--sleep-interval", str(sleep_min)]
@@ -178,6 +183,11 @@ async def download_cc_audio(
         *constraints,
         "-o",
         os.path.join(out_dir, "music_%(id)s.%(ext)s"),
+        "--no-check-certificate",
+        "--prefer-insecure",
+        "--force-ipv4",
+        "--fragment-retries", "3",
+        "--retries", "3",
     ]
     if sleep_min > 0:
         base_cmd += ["--sleep-interval", str(sleep_min)]
@@ -415,7 +425,7 @@ async def generate_ai_search_queries(
     api_url: str = OLLAMA_API_URL,
     model: str = OLLAMA_SETTINGS["default"]["model"],
     options: Optional[Dict[str, Any]] = None,
-    timeout: float = 60.0,
+    timeout: float = 900.0,
 ) -> List[str]:
     """
     Generate specialized search queries using AI for video, music, or images.
@@ -525,6 +535,7 @@ async def gather_scene_assets(
     scraper_settings: Optional[Dict[str, Any]] = None,
     ai_query_model: Optional[str] = None,
     ai_query_api_url: Optional[str] = None,
+    ai_query_timeout: Optional[float] = None,
     progress_fn: Optional[Callable[[float], Awaitable[None]]] = None,
 ) -> List[Dict[str, Optional[str]]]:
     """
@@ -599,7 +610,8 @@ async def gather_scene_assets(
                 queries = []
                 if use_ai:
                     queries = await generate_ai_search_queries(
-                        scene, "video", log, api_url=query_api_url, model=ai_query_model
+                        scene, "video", log, api_url=query_api_url, model=ai_query_model,
+                        timeout=ai_query_timeout or 900.0,
                     )
                 if not queries:
                     queries = _alternate_queries(visual_query, fallback_topic=fallback_topic)
@@ -627,7 +639,8 @@ async def gather_scene_assets(
             queries = []
             if use_ai:
                 queries = await generate_ai_search_queries(
-                    scene, "image", log, api_url=query_api_url, model=ai_query_model
+                    scene, "image", log, api_url=query_api_url, model=ai_query_model,
+                    timeout=ai_query_timeout or 900.0,
                 )
             if not queries:
                 queries = _alternate_queries(scene.get("visual_query", "abstract background"), fallback_topic=fallback_topic)
