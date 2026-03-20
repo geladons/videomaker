@@ -150,7 +150,7 @@ DEFAULT_SCRAPER = {
     "yt_dlp_sleep_max": float(os.environ.get("SCRAPER_YTDLP_SLEEP_MAX", "3.0")),
     "yt_dlp_search_count": int(os.environ.get("SCRAPER_YTDLP_SEARCH_COUNT", "8")),
     "image_delay_sec": float(os.environ.get("SCRAPER_IMAGE_DELAY", "0.6")),
-    "yt_dlp_duration_filter": int(os.environ.get("SCRAPER_YTDLP_DURATION_FILTER", "300")),
+    "yt_dlp_duration_filter": int(os.environ.get("SCRAPER_YTDLP_DURATION_FILTER", "180")),
     "yt_dlp_download_section": int(os.environ.get("SCRAPER_YTDLP_DOWNLOAD_SECTION", "60")),
 }
 

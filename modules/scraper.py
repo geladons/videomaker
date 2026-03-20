@@ -23,7 +23,7 @@ LogFn = Callable[[str, str], Awaitable[None]]
 
 
 def _build_scraper_constraints(settings: Optional[Dict[str, Any]] = None) -> List[str]:
-    """Build yt-dlp constraints from settings."""
+    """Build yt-dlp constraints for VIDEO downloads."""
     settings = settings or {}
     duration_filter = int(settings.get("yt_dlp_duration_filter", 300))
     download_section = int(settings.get("yt_dlp_download_section", 60))
@@ -33,6 +33,13 @@ def _build_scraper_constraints(settings: Optional[Dict[str, Any]] = None) -> Lis
         "--download-sections",
         f"*0-{download_section}",
     ]
+
+
+def _build_music_constraints() -> List[str]:
+    """Build yt-dlp constraints for MUSIC downloads.
+    Music needs FULL audio (no sections) and should be LONG ENOUGH (no duration filter).
+    """
+    return []  # No constraints - accept any length, download full audio
 
 async def _latest_file(
     directory: str, exts: List[str], min_mtime: Optional[float] = None
@@ -156,7 +163,7 @@ async def download_cc_audio(
     if not safe_query:
         safe_query = f"{mood} music"
 
-    constraints = _build_scraper_constraints(settings)
+    constraints = _build_music_constraints()
     base_cmd = [
         "yt-dlp",
         f"ytsearch{search_count}:{safe_query} creative commons",
@@ -300,8 +307,8 @@ async def _download_audio_fallback(
         if not simple_query:
             simple_query = f"{mood} music"
 
-        # Try yt-dlp with simpler settings
-        constraints = _build_scraper_constraints(settings)
+        # Try yt-dlp with simpler settings - use music constraints (no duration filter, no sections)
+        constraints = _build_music_constraints()
         cmd = [
             "yt-dlp",
             f"ytsearch3:{simple_query}",
@@ -419,6 +426,9 @@ async def generate_ai_search_queries(
     merged_options = {**OLLAMA_SETTINGS["default"]["params"], **(options or {})}
     merged_options["num_predict"] = min(merged_options.get("num_predict", 256), 256)
 
+    if log:
+        await log("info", f"Generating AI search queries for {asset_type} using {model} at {api_url}")
+
     try:
         queries = await llm.generate_search_queries(
             scene=scene,
@@ -431,13 +441,21 @@ async def generate_ai_search_queries(
             log=log,
         )
         if queries:
+            if log:
+                await log("info", f"AI generated {len(queries)} {asset_type} queries: {queries}")
             return queries
+        else:
+            if log:
+                await log("warn", f"AI returned empty queries for {asset_type}, using fallback")
     except Exception as exc:
         if log:
-            await log("warn", f"AI query generation failed for {asset_type}: {exc}")
+            await log("error", f"AI query generation failed for {asset_type}: {type(exc).__name__}: {exc}")
 
     # Fallback to simple query processing
-    return _alternate_queries(scene.get("visual_query", ""), fallback_topic=None)
+    fallback = _alternate_queries(scene.get("visual_query", ""), fallback_topic=None)
+    if log:
+        await log("info", f"Using fallback queries for {asset_type}: {fallback}")
+    return fallback
 
 
 def _simplify_query(query: str) -> str:
@@ -477,8 +495,11 @@ def _alternate_queries(query: str, fallback_topic: Optional[str] = None) -> List
                 candidates.append(f"{topic_words[0]} {topic_words[-1]}")
             candidates.append(f"{simplified_topic} screenshot")
             candidates.append(f"{simplified_topic} gameplay")
+            candidates.append(f"{simplified_topic} tutorial")
 
     # Progressive fallbacks - more specific first, then generic
+    candidates.append("minecraft gameplay")
+    candidates.append("minecraft building")
     candidates.append("nature landscape")
     candidates.append("city skyline")
     candidates.append("abstract background")

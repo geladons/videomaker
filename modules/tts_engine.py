@@ -225,17 +225,25 @@ async def _generate_coqui(
     tts = _coqui_cache.get(model_name)
     if tts is None:
         await log("info", f"Loading Coqui TTS model: {model_name}")
+        await log("info", "If model is not cached, it will be downloaded from HuggingFace (this may take several minutes)...")
         try:
             tts = await asyncio.to_thread(
                 TTS, model_name=model_name, progress_bar=False, gpu=False
             )
             _coqui_cache[model_name] = tts
+            await log("info", f"Coqui TTS model loaded successfully: {model_name}")
         except Exception as exc:
             error_msg = str(exc).lower()
             if "eof" in error_msg or "download" in error_msg or "connection" in error_msg:
-                await log("warn", f"Coqui model download/load failed ({exc}). Falling back to Piper.")
+                await log("error", f"Coqui model download failed: {exc}")
+                await log("error", f"Model '{model_name}' could not be downloaded. Check your internet connection or try a different model.")
+                await log("info", "Falling back to Piper TTS engine...")
+            elif "not found" in error_msg or "404" in error_msg:
+                await log("error", f"Coqui model '{model_name}' not found on HuggingFace.")
+                await log("info", "Falling back to Piper TTS engine...")
             else:
                 await log("error", f"Failed to load Coqui model {model_name}: {exc}")
+                await log("info", "Falling back to Piper TTS engine...")
             return await generate_voiceovers(
                 texts,
                 out_dir,
