@@ -432,7 +432,7 @@ async def generate_search_queries(
                 await asyncio.sleep(request_delay)
                 
             if log:
-                await log("raw", f"LLM Search queries prompt (attempt {attempt}):\n{payload.get('prompt', '')}")
+                await log("raw", f"LLM Search queries prompt:\n{payload.get('prompt', '')}")
 
             async with httpx.AsyncClient(timeout=timeout) as client:
                 resp = await client.post(f"{api_url}/api/generate", json=payload)
@@ -448,6 +448,13 @@ async def generate_search_queries(
                 if attempt < max_retries:
                     await asyncio.sleep(2 ** attempt * 0.5)
                     continue
+                # Return fallback keywords instead of empty list
+                if base_query:
+                    from modules.utils import clean_and_tokenize
+                    fallback_keywords = clean_and_tokenize(base_query, max_words=4).split()
+                    if log:
+                        await log("info", f"Using fallback keywords for {asset_type}: {', '.join(fallback_keywords)}")
+                    return fallback_keywords
                 return []
             
             # Strip thinking/markdown
@@ -485,12 +492,26 @@ async def generate_search_queries(
             if attempt < max_retries:
                 await asyncio.sleep(2 ** attempt * 0.5)
                 continue
+            # If this is the last attempt and we still have an exception, try fallback
+            if base_query:
+                from modules.utils import clean_and_tokenize
+                fallback_keywords = clean_and_tokenize(base_query, max_words=4).split()
+                if log:
+                    await log("info", f"Using fallback keywords for {asset_type}: {', '.join(fallback_keywords)}")
+                return fallback_keywords
 
     # All retries exhausted
     if log and last_error:
         error_type = type(last_error).__name__
         error_msg = str(last_error) if str(last_error) else "(empty exception)"
         await log("error", f"AI search query generation failed after {max_retries} attempts: {error_type}: {error_msg}")
+    # Final fallback if we have base_query
+    if base_query:
+        from modules.utils import clean_and_tokenize
+        fallback_keywords = clean_and_tokenize(base_query, max_words=4).split()
+        if log:
+            await log("info", f"Using final fallback keywords for {asset_type}: {', '.join(fallback_keywords)}")
+        return fallback_keywords
     return []
 
 

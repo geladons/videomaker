@@ -31,6 +31,11 @@ with patch('database.create_task', new=AsyncMock(return_value="task_123")):
 class TestDynamicTimeline(unittest.IsolatedAsyncioTestCase):
     
     async def _run_test_with_mocks(self, mock_plan_val, mock_get_dur_val, task_options):
+        # Ensure workspace directory exists before running the test
+        import os
+        workspace_path = "/home/runner/work/videomaker/videomaker/workspaces/task_123"
+        os.makedirs(workspace_path, exist_ok=True)
+        
         with (
             patch('orchestrator.llm.plan_timeline', new=AsyncMock(return_value=mock_plan_val)),
             patch('orchestrator.llm.generate_voiceover', new=AsyncMock(side_effect=lambda s, **kw: f"Voiceover for {s['voiceover']}")),

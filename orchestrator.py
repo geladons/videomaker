@@ -69,10 +69,6 @@ class Orchestrator:
             if key == "vision":
                 settings[key]["enabled"] = await get_setting(f"{prefix}enabled", ollama_setting["enabled"])
         
-        # Fix: If ai_query api_url is still the default localhost, use the main default api_url instead
-        # This ensures AI queries use the user's configured Ollama URL
-        if settings.get("ai_query", {}).get("api_url") == OLLAMA_API_URL:
-            settings["ai_query"]["api_url"] = settings.get("default", {}).get("api_url", OLLAMA_API_URL)
         
         return settings
 
