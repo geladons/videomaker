@@ -38,6 +38,3 @@ workspaces/
 # Database
 *.sqlite
 *.sqlite3
-IMPLEMENTATION_TODO.md
-tests/test_intelligent_rendering.py
-tests/test_prompt_logging.py
